@@ -122,7 +122,7 @@ func (r *VideoRepository) FindByID(
 // Any zero-value field in VideoFilter is ignored (not applied as a filter).
 func (r *VideoRepository) FindByFilter(
 	filter models.VideoFilter,
-) ([]models.Video, error) {
+) ([]models.Video, int, error) {
 
 	baseQuery := `
 		SELECT
@@ -158,11 +158,31 @@ func (r *VideoRepository) FindByFilter(
 		argIdx++
 	}
 
-	query := baseQuery
+	whereClause := ""
 	if len(conditions) > 0 {
-		query += " WHERE " + strings.Join(conditions, " AND ")
+		whereClause = " WHERE " + strings.Join(conditions, " AND ")
 	}
-	query += " ORDER BY created_at DESC"
+
+	// 1. Count query
+	countQuery := "SELECT COUNT(*) FROM videos" + whereClause
+	var totalItems int
+	err := r.DB.QueryRow(context.Background(), countQuery, args...).Scan(&totalItems)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// 2. Select query with Pagination
+	query := baseQuery + whereClause + " ORDER BY created_at DESC"
+	
+	if filter.Limit > 0 {
+		offset := (filter.Page - 1) * filter.Limit
+		if offset < 0 {
+			offset = 0
+		}
+		query += fmt.Sprintf(" LIMIT $%d OFFSET $%d", argIdx, argIdx+1)
+		args = append(args, filter.Limit, offset)
+		argIdx += 2
+	}
 
 	rows, err := r.DB.Query(
 		context.Background(),
@@ -171,12 +191,17 @@ func (r *VideoRepository) FindByFilter(
 	)
 
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	defer rows.Close()
 
-	return scanVideos(rows)
+	videos, err := scanVideos(rows)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return videos, totalItems, nil
 }
 
 // scanVideos is a shared helper to scan pgx rows into []models.Video.

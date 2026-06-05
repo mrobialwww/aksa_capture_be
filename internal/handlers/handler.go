@@ -6,6 +6,7 @@ import (
 	"aksa_capture_be/internal/services"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"time"
@@ -141,9 +142,24 @@ func (h *VideoHandler) CreateVideo(
 func (h *VideoHandler) GetVideos(
 	c *gin.Context,
 ) {
-	filter := models.VideoFilter{}
+	var filter models.VideoFilter
 
-	hasFilter := false
+	// Parse pagination
+	page := 1
+	if pageStr := c.Query("page"); pageStr != "" {
+		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+			page = p
+		}
+	}
+	limit := 40 // default limit
+	if limitStr := c.Query("limit"); limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
+			limit = l
+		}
+	}
+	
+	filter.Page = page
+	filter.Limit = limit
 
 	if isCorrectStr := c.Query("is_correct"); isCorrectStr != "" {
 		val, err := strconv.ParseBool(isCorrectStr)
@@ -155,7 +171,6 @@ func (h *VideoHandler) GetVideos(
 			return
 		}
 		filter.IsCorrect = &val
-		hasFilter = true
 	}
 
 	if typeStr := c.Query("type"); typeStr != "" {
@@ -167,24 +182,13 @@ func (h *VideoHandler) GetVideos(
 			return
 		}
 		filter.Type = typeStr
-		hasFilter = true
 	}
 
 	if labelStr := c.Query("label"); labelStr != "" {
 		filter.Label = labelStr
-		hasFilter = true
 	}
 
-	var (
-		videos []models.Video
-		err    error
-	)
-
-	if hasFilter {
-		videos, err = h.videoRepo.FindByFilter(filter)
-	} else {
-		videos, err = h.videoRepo.FindAll()
-	}
+	videos, totalItems, err := h.videoRepo.FindByFilter(filter)
 
 	if err != nil {
 		c.JSON(
@@ -202,9 +206,19 @@ func (h *VideoHandler) GetVideos(
 		videos[i].VideoURL = baseURL + videos[i].VideoPath
 	}
 
+	totalPages := int(math.Ceil(float64(totalItems) / float64(limit)))
+
 	c.JSON(
 		http.StatusOK,
-		gin.H{"data": videos},
+		models.PaginatedResponse{
+			Data: videos,
+			Meta: models.Meta{
+				CurrentPage: page,
+				Limit:       limit,
+				TotalItems:  totalItems,
+				TotalPages:  totalPages,
+			},
+		},
 	)
 }
 

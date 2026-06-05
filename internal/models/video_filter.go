@@ -6,4 +6,6 @@ type VideoFilter struct {
 	IsCorrect *bool  // nil = no filter
 	Type      string // "" = no filter; valid: "huruf", "kata"
 	Label     string // "" = no filter; partial match (ILIKE)
+	Page      int    // pagination
+	Limit     int    // pagination
 }

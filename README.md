@@ -202,6 +202,8 @@ Mengambil daftar video. Semua query params bersifat opsional dan bisa dikombinas
 
 | Parameter    | Nilai Valid                | Contoh             |
 | ------------ | -------------------------- | ------------------ |
+| `page`       | integer (default: 1)       | `?page=2`          |
+| `limit`      | integer (default: 40)      | `?limit=20`        |
 | `is_correct` | `true` / `false`           | `?is_correct=true` |
 | `type`       | `huruf` / `kata`           | `?type=huruf`      |
 | `label`      | teks bebas (partial match) | `?label=A`         |
@@ -233,7 +235,13 @@ Mengambil daftar video. Semua query params bersifat opsional dan bisa dikombinas
       "notes": "Pelafalan jelas",
       "created_at": "2026-06-05T10:00:00Z"
     }
-  ]
+  ],
+  "meta": {
+    "current_page": 1,
+    "limit": 40,
+    "total_items": 150,
+    "total_pages": 4
+  }
 }
 ```
 
