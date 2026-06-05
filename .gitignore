@@ -1,0 +1,26 @@
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# External dependencies
+/vendor/
+
+# Binary triggers & builds
+/bin/
+/tmp/
+/dist/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# IDEs and editors
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
