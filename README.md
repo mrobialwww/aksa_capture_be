@@ -355,10 +355,11 @@ Semua error menggunakan format yang sama:
 | 1   | POST   | `/api/v1/upload-url`                                        | `{"type":"huruf","label":"A"}` |
 | 2   | POST   | `/api/v1/videos`                                            | JSON body                      |
 | 3   | GET    | `/api/v1/videos`                                            | —                              |
-| 4   | GET    | `/api/v1/videos?is_correct=true`                            | —                              |
-| 5   | GET    | `/api/v1/videos?type=huruf`                                 | —                              |
-| 6   | GET    | `/api/v1/videos?label=A`                                    | —                              |
-| 7   | GET    | `/api/v1/videos?type=kata&is_correct=false`                 | —                              |
-| 8   | GET    | `/api/v1/videos?type=huruf&is_correct=true&label=B`         | —                              |
-| 9   | GET    | `/api/v1/videos/550e8400-e29b-41d4-a716-446655440000`       | —                              |
-| 10  | PATCH  | `/api/v1/videos/550e8400-e29b-41d4-a716-446655440000/notes` | `{"notes":"Catatan baru..."}`  |
+| 4   | GET    | `/api/v1/videos?page=2&limit=20`                            | —                              |
+| 5   | GET    | `/api/v1/videos?is_correct=true`                            | —                              |
+| 6   | GET    | `/api/v1/videos?type=huruf`                                 | —                              |
+| 7   | GET    | `/api/v1/videos?label=A`                                    | —                              |
+| 8   | GET    | `/api/v1/videos?type=kata&is_correct=false&page=1`          | —                              |
+| 9   | GET    | `/api/v1/videos?type=huruf&is_correct=true&label=B`         | —                              |
+| 10  | GET    | `/api/v1/videos/550e8400-e29b-41d4-a716-446655440000`       | —                              |
+| 11  | PATCH  | `/api/v1/videos/550e8400-e29b-41d4-a716-446655440000/notes` | `{"notes":"Catatan baru..."}`  |
