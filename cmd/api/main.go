@@ -7,6 +7,7 @@ import (
 	"aksa_capture_be/internal/config"
 	"aksa_capture_be/internal/database"
 	"aksa_capture_be/internal/handlers"
+	"aksa_capture_be/internal/middleware"
 	"aksa_capture_be/internal/repository"
 	"aksa_capture_be/internal/routes"
 	"aksa_capture_be/internal/services"
@@ -60,6 +61,7 @@ func main() {
 
 	// Router
 	router := gin.Default()
+	router.Use(middleware.CORSMiddleware())
 
 	routes.RegisterRoutes(
 		router,
