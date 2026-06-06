@@ -103,7 +103,7 @@ CREATE TABLE videos (
 
 ## API Endpoints
 
-**Base URL:** `http://localhost:3000`  
+**Base URL (Production):** `https://aksacapturebe-production.up.railway.app`  
 **Prefix:** `/api/v1`
 
 ### Ringkasan
