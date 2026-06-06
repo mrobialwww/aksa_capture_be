@@ -68,9 +68,14 @@ func main() {
 		videoHandler,
 	)
 
-	if err := router.Run(
-		":" + os.Getenv("PORT"),
-	); err != nil {
+	port := os.Getenv("PORT")
+
+	if port == "" {
+		port = "3000"
+	}
+
+	// Bind ke 0.0.0.0 agar bisa diakses publik oleh Render
+	if err := router.Run("0.0.0.0:" + port); err != nil {
 		log.Fatal(err)
 	}
 }
