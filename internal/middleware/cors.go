@@ -22,6 +22,7 @@ func CORSMiddleware() gin.HandlerFunc {
 	defaultOrigins := []string{
 		"http://localhost:3000",
 		"http://localhost:3001",
+		"https://aksa-capture.vercel.app",
 	}
 
 	// Merge with any additional origins set via environment variable
