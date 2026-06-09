@@ -47,33 +47,17 @@ cd aksa_capture_be
 go mod tidy
 ```
 
-### 2. Konfigurasi `.env`
-
-```env
-PORT=3000
-
-DATABASE_URL=postgresql://<user>:<password>@<host>/<db>?sslmode=require
-
-R2_ACCOUNT_ID=<cloudflare_account_id>
-R2_BUCKET_NAME=<nama_bucket>
-R2_ACCESS_KEY_ID=<r2_access_key>
-R2_SECRET_ACCESS_KEY=<r2_secret_key>
-R2_PUBLIC_URL=https://pub-xxxxxx.r2.dev/
-```
-
-> `R2_PUBLIC_URL` didapat dari dashboard Cloudflare R2 → Settings → Public Access → R2.dev subdomain. Pastikan diakhiri dengan `/`.
-
-### 3. Jalankan migrasi database
+### 2. Jalankan migrasi database
 
 ```bash
 .\scripts\migrate.ps1
 ```
 
-### 4. (Opsional) Jalankan seed data dummy
+### 3. (Opsional) Jalankan seed data dummy
 
 Buka file `scripts/seed.sql` lalu eksekusi isinya melalui SQL client (DBeaver, TablePlus, pgAdmin, dsb).
 
-### 5. Jalankan server
+### 4. Jalankan server
 
 ```bash
 air
