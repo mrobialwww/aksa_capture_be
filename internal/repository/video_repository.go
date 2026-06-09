@@ -185,7 +185,7 @@ func (r *VideoRepository) FindByFilter(
 
 	// 2. Select query with Pagination
 	query := baseQuery + whereClause + " ORDER BY created_at DESC"
-	
+
 	if filter.Limit > 0 {
 		offset := (filter.Page - 1) * filter.Limit
 		if offset < 0 {

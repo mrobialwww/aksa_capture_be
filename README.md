@@ -75,6 +75,8 @@ CREATE TYPE video_type AS ENUM ('huruf', 'kata');
 CREATE TABLE videos (
     id         UUID PRIMARY KEY,
     video_path TEXT NOT NULL,
+    name       TEXT NOT NULL,
+    gender     TEXT NOT NULL,
     label      TEXT NOT NULL,
     type       video_type NOT NULL,
     is_correct BOOLEAN NOT NULL DEFAULT TRUE,
@@ -150,6 +152,8 @@ Menyimpan metadata video ke database setelah proses upload ke R2 selesai.
 {
   "id": "550e8400-e29b-41d4-a716-446655440000",
   "video_path": "Dataset/huruf/A/record_1748953317123.mp4",
+  "name": "Budi",
+  "gender": "L",
   "label": "A",
   "type": "huruf",
   "is_correct": true,
@@ -161,6 +165,8 @@ Menyimpan metadata video ke database setelah proses upload ke R2 selesai.
 | ------------ | ------------- | ----- | ----------------------------------- |
 | `id`         | string (UUID) | ✅    | UUID dari response `/upload-url`    |
 | `video_path` | string        | ✅    | Path R2 dari response `/upload-url` |
+| `name`       | string        | ✅    | Nama peraga bahasa isyarat          |
+| `gender`     | string        | ✅    | Jenis kelamin peraga (L/P)          |
 | `label`      | string        | ✅    | Label video                         |
 | `type`       | string        | ✅    | `"huruf"` atau `"kata"`             |
 | `is_correct` | bool          | ✅    | Apakah rekaman valid                |
@@ -213,6 +219,8 @@ Mengambil daftar video. Semua query params bersifat opsional dan bisa dikombinas
       "id": "550e8400-e29b-41d4-a716-446655440000",
       "video_path": "Dataset/huruf/A/record_1748953317123.mp4",
       "video_url": "https://pub-xxx.r2.dev/Dataset/huruf/A/record_1748953317123.mp4",
+      "name": "Budi",
+      "gender": "L",
       "label": "A",
       "type": "huruf",
       "is_correct": true,
@@ -253,6 +261,8 @@ GET /api/v1/videos/550e8400-e29b-41d4-a716-446655440000
     "id": "550e8400-e29b-41d4-a716-446655440000",
     "video_path": "Dataset/huruf/A/record_1748953317123.mp4",
     "video_url": "https://pub-xxx.r2.dev/Dataset/huruf/A/record_1748953317123.mp4",
+    "name": "Budi",
+    "gender": "L",
     "label": "A",
     "type": "huruf",
     "is_correct": true,
