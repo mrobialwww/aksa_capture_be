@@ -31,16 +31,20 @@ func (r *VideoRepository) Create(
 		(
 			id,
 			video_path,
+			name,
+			gender,
 			label,
 			type,
 			is_correct,
 			notes
 		)
 		VALUES
-		($1,$2,$3,$4,$5,$6)
+		($1,$2,$3,$4,$5,$6,$7,$8)
 		`,
 		video.ID,
 		video.VideoPath,
+		video.Name,
+		video.Gender,
 		video.Label,
 		video.Type,
 		video.IsCorrect,
@@ -60,6 +64,8 @@ func (r *VideoRepository) FindAll() (
 		SELECT
 			id,
 			video_path,
+			name,
+			gender,
 			label,
 			type,
 			is_correct,
@@ -89,6 +95,8 @@ func (r *VideoRepository) FindByID(
 		SELECT
 			id,
 			video_path,
+			name,
+			gender,
 			label,
 			type,
 			is_correct,
@@ -104,6 +112,8 @@ func (r *VideoRepository) FindByID(
 	err := row.Scan(
 		&video.ID,
 		&video.VideoPath,
+		&video.Name,
+		&video.Gender,
 		&video.Label,
 		&video.Type,
 		&video.IsCorrect,
@@ -128,6 +138,8 @@ func (r *VideoRepository) FindByFilter(
 		SELECT
 			id,
 			video_path,
+			name,
+			gender,
 			label,
 			type,
 			is_correct,
@@ -218,6 +230,8 @@ func scanVideos(rows interface {
 		err := rows.Scan(
 			&video.ID,
 			&video.VideoPath,
+			&video.Name,
+			&video.Gender,
 			&video.Label,
 			&video.Type,
 			&video.IsCorrect,

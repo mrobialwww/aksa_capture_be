@@ -6,6 +6,8 @@ type Video struct {
 	ID        string    `json:"id"`
 	VideoPath string    `json:"video_path"`
 	VideoURL  string    `json:"video_url"`
+	Name      string    `json:"name"`
+	Gender    string    `json:"gender"`
 	Label     string    `json:"label"`
 	Type      string    `json:"type"`
 	IsCorrect bool      `json:"is_correct"`

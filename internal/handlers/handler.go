@@ -106,6 +106,8 @@ func (h *VideoHandler) CreateVideo(
 	video := models.Video{
 		ID:        req.ID,
 		VideoPath: req.VideoPath,
+		Name:      req.Name,
+		Gender:    req.Gender,
 		Label:     req.Label,
 		Type:      req.Type,
 		IsCorrect: req.IsCorrect,
