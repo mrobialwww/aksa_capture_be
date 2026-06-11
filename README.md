@@ -1,17 +1,17 @@
 # aksa_capture_be
 
-Backend API untuk aplikasi **Aksa Capture** — sistem pengumpulan dataset video rekaman huruf dan kata untuk keperluan pengenalan bahasa isyarat.
+Backend API untuk aplikasi **Aksa Capture** — sistem pengumpulan dataset video rekaman gerakan bahasa isyarat BISINDO (huruf dan kata).
 
 ## Tech Stack
 
-| Layer          | Teknologi         |
-| -------------- | ----------------- |
-| Language       | Go                |
-| Web Framework  | Gin               |
-| Database       | PostgreSQL (Neon) |
-| Object Storage | Cloudflare R2     |
-| DB Migration   | golang-migrate    |
-| Live Reload    | Air               |
+| Layer          | Teknologi          |
+| -------------- | ------------------ |
+| Language       | Go 1.21+           |
+| Web Framework  | Gin                |
+| Database       | PostgreSQL (Neon)  |
+| Object Storage | Cloudflare R2      |
+| DB Migration   | golang-migrate     |
+| Live Reload    | Air                |
 
 ---
 
@@ -19,25 +19,25 @@ Backend API untuk aplikasi **Aksa Capture** — sistem pengumpulan dataset video
 
 ```
 aksa_capture_be/
-├── cmd/api/            # Entry point aplikasi
+├── cmd/api/            # Entry point aplikasi (main.go)
 ├── internal/
-│   ├── config/         # Inisialisasi client R2
-│   ├── database/       # Koneksi PostgreSQL
+│   ├── config/         # Inisialisasi client R2 (AWS SDK)
+│   ├── database/       # Koneksi PostgreSQL (pgx)
 │   ├── handlers/       # HTTP handler (controller)
 │   ├── middleware/     # Middleware Gin
 │   ├── models/         # Struct model & request/response
-│   ├── repository/     # Query database
+│   ├── repository/     # Query & operasi database
 │   ├── routes/         # Registrasi route
 │   └── services/       # Business logic (R2 presign URL)
 ├── migrations/         # File SQL migration (up/down)
-├── scripts/            # Script bantu (migrate, seed)
+├── scripts/            # Script bantu (migrate.ps1, seed.sql)
 ├── .air.toml           # Konfigurasi Air (live reload)
 └── .env                # Environment variables
 ```
 
 ---
 
-## Setup
+## Setup & Instalasi
 
 ### 1. Clone & install dependencies
 
@@ -47,17 +47,44 @@ cd aksa_capture_be
 go mod tidy
 ```
 
-### 2. Jalankan migrasi database
+### 2. Konfigurasi environment
 
-```bash
-.\scripts\migrate.ps1
+Buat file `.env` di root project:
+
+```env
+PORT=3000
+
+DATABASE_URL=postgresql://<user>:<password>@<host>/<db>?sslmode=require
+
+R2_ACCOUNT_ID=<cloudflare-account-id>
+R2_BUCKET_NAME=<bucket-name>
+R2_ACCESS_KEY_ID=<access-key>
+R2_SECRET_ACCESS_KEY=<secret-key>
+
+# URL publik bucket R2 untuk diakses dari luar
+R2_PUBLIC_URL=https://pub-<hash>.r2.dev
 ```
 
-### 3. (Opsional) Jalankan seed data dummy
+### 3. Jalankan migrasi database
 
-Buka file `scripts/seed.sql` lalu eksekusi isinya melalui SQL client (DBeaver, TablePlus, pgAdmin, dsb).
+```powershell
+.\scripts\migrate.ps1 up
+```
 
-### 4. Jalankan server
+Untuk rollback:
+```powershell
+.\scripts\migrate.ps1 down
+```
+
+### 4. (Opsional) Jalankan seed data dummy
+
+```powershell
+psql $env:DATABASE_URL -f scripts/seed.sql
+```
+
+Seed akan membuat 160 sample video dummy (80 huruf "A" + 80 kata "perkenalkan").
+
+### 5. Jalankan server
 
 ```bash
 air
@@ -69,38 +96,115 @@ Server berjalan di `http://localhost:3000`.
 
 ## Database Schema
 
-```sql
-CREATE TYPE video_type AS ENUM ('huruf', 'kata');
+Database menggunakan **desain tabel ternormalisasi**. Setiap video dipecah menjadi 5 tabel yang terhubung via `sample_id` (PRIMARY KEY TEXT).
 
+```
+videos
+  └── media    (1:1 — file video & info rekaman)
+  └── label    (1:1 — anotasi / ground-truth)
+  └── signer   (1:1 — informasi peraga)
+  └── quality  (1:1 — flag kualitas rekaman)
+```
+
+### ENUM Types
+
+```sql
+-- Tipe gerakan
+CREATE TYPE gesture_type_enum AS ENUM ('letter', 'word');
+
+-- Kategori kesalahan gerakan
+CREATE TYPE error_category_enum AS ENUM (
+    'handshape_wrong',
+    'orientation_wrong',
+    'location_wrong',
+    'movement_wrong',
+    'non_manual_marker_missing',
+    'finger_spelling_incomplete',
+    'mixed_with_other_sign',
+    'unclear'
+);
+
+-- Lokasi pengambilan video
+CREATE TYPE capture_location_enum AS ENUM ('indoor', 'outdoor');
+```
+
+### Tabel Detail
+
+```sql
+-- Core identity setiap video sample
 CREATE TABLE videos (
-    id         UUID PRIMARY KEY,
-    video_path TEXT NOT NULL,
-    name       TEXT NOT NULL,
-    gender     TEXT NOT NULL,
-    label      TEXT NOT NULL,
-    type       video_type NOT NULL,
-    is_correct BOOLEAN NOT NULL DEFAULT TRUE,
-    notes      TEXT,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    sample_id  TEXT        PRIMARY KEY,
+    task_type  TEXT[]      NOT NULL DEFAULT '{}',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- File video & konteks perekaman
+CREATE TABLE media (
+    sample_id         TEXT PRIMARY KEY REFERENCES videos (sample_id) ON DELETE CASCADE,
+    video_path        TEXT NOT NULL,                    -- path relatif di R2: "Dataset/letter/A/record_xxx.mp4"
+    video_url         TEXT NOT NULL,                    -- URL publik lengkap
+    duration_sec      FLOAT,
+    resolution_width  INT,
+    resolution_height INT,
+    capture_location  capture_location_enum
+);
+
+-- Anotasi / label ground-truth
+-- NOTE: target_id tidak disimpan, dihitung di query: gesture_type || '_' || gesture_name
+CREATE TABLE label (
+    sample_id         TEXT PRIMARY KEY REFERENCES videos (sample_id) ON DELETE CASCADE,
+    gesture_type      gesture_type_enum NOT NULL,       -- 'letter' atau 'word'
+    gesture_name      TEXT NOT NULL,                    -- e.g. "A", "perkenalkan"
+    bisindo_region    TEXT,                             -- e.g. "Jawa Timur"
+    bisindo_subregion TEXT,                             -- e.g. "Malang"
+    is_correct        BOOLEAN NOT NULL DEFAULT TRUE,
+    error_category    error_category_enum,              -- diisi jika is_correct = false
+    validated_by      VARCHAR(255),
+    reasoning         TEXT                              -- catatan anotator
+);
+
+-- Peraga yang melakukan gerakan
+CREATE TABLE signer (
+    sample_id   TEXT PRIMARY KEY REFERENCES videos (sample_id) ON DELETE CASCADE,
+    signer_name VARCHAR(255),
+    gender      VARCHAR(50)                             -- 'male' atau 'female'
+);
+
+-- Flag kualitas rekaman (semua default TRUE)
+CREATE TABLE quality (
+    sample_id     TEXT PRIMARY KEY REFERENCES videos (sample_id) ON DELETE CASCADE,
+    hands_visible BOOLEAN NOT NULL DEFAULT TRUE,
+    face_visible  BOOLEAN NOT NULL DEFAULT TRUE,
+    hands_clear   BOOLEAN NOT NULL DEFAULT TRUE,
+    face_clear    BOOLEAN NOT NULL DEFAULT TRUE
 );
 ```
+
+### Kolom `task_type` (Array)
+
+`task_type` di tabel `videos` diisi otomatis oleh backend berdasarkan nilai `is_correct`:
+
+| `is_correct` | `task_type`        |
+| ------------ | ------------------ |
+| `true`       | `["lr", "vlm"]`    |
+| `false`      | `["vlm"]`          |
 
 ---
 
 ## API Endpoints
 
-**Base URL (Production):** `https://aksacapturebe-production.up.railway.app`  
+**Base URL (Local):** `http://localhost:3000`  
 **Prefix:** `/api/v1`
 
 ### Ringkasan
 
-| Method  | Endpoint                   | Deskripsi                                    |
-| ------- | -------------------------- | -------------------------------------------- |
-| `POST`  | `/api/v1/upload-url`       | Generate presigned URL untuk upload ke R2    |
-| `POST`  | `/api/v1/videos`           | Simpan metadata video setelah upload selesai |
-| `GET`   | `/api/v1/videos`           | Ambil semua video (dengan filter opsional)   |
-| `GET`   | `/api/v1/videos/:id`       | Ambil satu video berdasarkan ID              |
-| `PATCH` | `/api/v1/videos/:id/notes` | Update field `notes` video                   |
+| Method  | Endpoint                       | Deskripsi                                    |
+| ------- | ------------------------------ | -------------------------------------------- |
+| `POST`  | `/api/v1/upload-url`           | Generate presigned URL untuk upload ke R2    |
+| `POST`  | `/api/v1/videos`               | Simpan metadata video setelah upload selesai |
+| `GET`   | `/api/v1/videos`               | Ambil daftar video (dengan filter opsional)  |
+| `GET`   | `/api/v1/videos/:id`           | Ambil satu video berdasarkan `sample_id`     |
+| `PATCH` | `/api/v1/videos/:id/metadata`  | Partial update label & quality video         |
 
 ---
 
@@ -108,35 +212,45 @@ CREATE TABLE videos (
 
 **`POST /api/v1/upload-url`**
 
-Membuat presigned URL untuk upload video langsung ke Cloudflare R2. Path video dibangun otomatis dari `type` dan `label`.
+Membuat `sample_id` baru dan presigned URL untuk upload video langsung ke Cloudflare R2. Path video dibangun otomatis dari `type` dan `label`.
+
+> **Penting:** Simpan `sample_id`, `video_path`, dan `video_url` dari response ini. Ketiga nilai ini wajib dikirim ke endpoint `POST /api/v1/videos`.
 
 **Request Body:**
 
 ```json
 {
-  "type": "huruf",
+  "type": "letter",
   "label": "A"
 }
 ```
 
-| Field   | Type   | Wajib | Keterangan              |
-| ------- | ------ | ----- | ----------------------- |
-| `type`  | string | ✅    | `"huruf"` atau `"kata"` |
-| `label` | string | ✅    | Label/kategori video    |
+| Field   | Type   | Wajib | Nilai Valid           |
+| ------- | ------ | ----- | --------------------- |
+| `type`  | string | ✅    | `"letter"` atau `"word"` |
+| `label` | string | ✅    | Nama huruf/kata       |
 
 **Response `200 OK`:**
 
 ```json
 {
-  "id": "550e8400-e29b-41d4-a716-446655440000",
-  "video_path": "Dataset/huruf/A/record_1748953317123.mp4",
-  "upload_url": "https://..."
+  "sample_id":  "550e8400-e29b-41d4-a716-446655440000",
+  "video_path": "Dataset/letter/A/record_1749646823000.mp4",
+  "video_url":  "https://pub-xxx.r2.dev/Dataset/letter/A/record_1749646823000.mp4",
+  "upload_url": "https://aksarasa.r2.cloudflarestorage.com/Dataset/...?X-Amz-Signature=..."
 }
 ```
 
-> **Alur:** Gunakan `upload_url` untuk upload file `.mp4` langsung ke R2 via HTTP `PUT`. Setelah berhasil, simpan `id` dan `video_path` untuk dikirim ke endpoint `POST /videos`.
+| Field        | Keterangan                                                              |
+| ------------ | ----------------------------------------------------------------------- |
+| `sample_id`  | UUID unik yang menjadi primary key di semua tabel                      |
+| `video_path` | Path relatif di R2, disimpan di DB untuk portabilitas                  |
+| `video_url`  | URL publik final — gunakan ini untuk memutar video di frontend          |
+| `upload_url` | Presigned PUT URL — gunakan untuk upload file `.mp4` langsung ke R2    |
 
-> Format `video_path`: `Dataset/{type}/{label}/record_{timestamp_ms}.mp4`
+**Alur Upload:**
+1. `PUT {upload_url}` — upload file `.mp4` dengan `Content-Type: video/mp4`
+2. `POST /api/v1/videos` — kirim metadata setelah upload berhasil
 
 ---
 
@@ -144,33 +258,71 @@ Membuat presigned URL untuk upload video langsung ke Cloudflare R2. Path video d
 
 **`POST /api/v1/videos`**
 
-Menyimpan metadata video ke database setelah proses upload ke R2 selesai.
+Menyimpan metadata video secara atomik ke semua tabel (`videos`, `media`, `label`, `signer`, `quality`). Semua field di dalam `signer` dan `bisindo_region_version` **wajib diisi**.
 
 **Request Body:**
 
 ```json
 {
-  "id": "550e8400-e29b-41d4-a716-446655440000",
-  "video_path": "Dataset/huruf/A/record_1748953317123.mp4",
-  "name": "Budi",
-  "gender": "L",
-  "label": "A",
-  "type": "huruf",
-  "is_correct": true,
-  "notes": "Pelafalan jelas"
+  "sample_id": "550e8400-e29b-41d4-a716-446655440000",
+  "media": {
+    "video_path": "Dataset/letter/A/record_1749646823000.mp4",
+    "video_url": "https://pub-xxx.r2.dev/Dataset/letter/A/record_1749646823000.mp4",
+    "duration_sec": 3.5,
+    "resolution": {
+      "width": 1280,
+      "height": 720
+    },
+    "capture_location": "indoor"
+  },
+  "label": {
+    "gesture_type": "letter",
+    "gesture_name": "A",
+    "bisindo_region_version": {
+      "region": "Jawa Timur",
+      "subregion": "Malang"
+    },
+    "is_correct": true,
+    "error_category": null,
+    "validated_by": null,
+    "reasoning": null
+  },
+  "signer": {
+    "signer_name": "Bintang",
+    "gender": "female"
+  },
+  "quality": {
+    "hands_visible": true,
+    "face_visible": true,
+    "hands_clear": false,
+    "face_clear": false
+  }
 }
 ```
 
-| Field        | Type          | Wajib | Keterangan                          |
-| ------------ | ------------- | ----- | ----------------------------------- |
-| `id`         | string (UUID) | ✅    | UUID dari response `/upload-url`    |
-| `video_path` | string        | ✅    | Path R2 dari response `/upload-url` |
-| `name`       | string        | ✅    | Nama peraga bahasa isyarat          |
-| `gender`     | string        | ✅    | Jenis kelamin peraga (L/P)          |
-| `label`      | string        | ✅    | Label video                         |
-| `type`       | string        | ✅    | `"huruf"` atau `"kata"`             |
-| `is_correct` | bool          | ✅    | Apakah rekaman valid                |
-| `notes`      | string        | ❌    | Catatan tambahan (boleh kosong)     |
+**Field Detail:**
+
+| Field                           | Type    | Wajib | Keterangan                                              |
+| ------------------------------- | ------- | ----- | ------------------------------------------------------- |
+| `sample_id`                     | string  | ✅    | Dari response `POST /upload-url`                        |
+| `media.video_path`              | string  | ✅    | Dari response `POST /upload-url`                        |
+| `media.video_url`               | string  | ✅    | Dari response `POST /upload-url`                        |
+| `media.duration_sec`            | float   | ❌    | Durasi video dalam detik                                |
+| `media.resolution`              | object  | ❌    | `{ width, height }` dalam pixel                        |
+| `media.capture_location`        | string  | ❌    | `"indoor"` atau `"outdoor"`                            |
+| `label.gesture_type`            | string  | ✅    | `"letter"` atau `"word"`                               |
+| `label.gesture_name`            | string  | ✅    | Nama huruf/kata, e.g. `"A"`, `"perkenalkan"`           |
+| `label.bisindo_region_version`  | object  | ✅    | `{ region, subregion }` — asal daerah dialek BISINDO   |
+| `label.is_correct`              | bool    | ❌    | Default `true`. Menentukan `task_type` secara otomatis |
+| `label.error_category`          | string  | ❌    | Diisi jika `is_correct: false` (lihat ENUM di atas)    |
+| `label.validated_by`            | string  | ❌    | Nama validator                                          |
+| `label.reasoning`               | string  | ❌    | Catatan anotator                                        |
+| `signer.signer_name`            | string  | ✅    | Nama lengkap peraga                                     |
+| `signer.gender`                 | string  | ✅    | `"male"` atau `"female"`                               |
+| `quality.hands_visible`         | bool    | ❌    | Default `true`                                          |
+| `quality.face_visible`          | bool    | ❌    | Default `true`                                          |
+| `quality.hands_clear`           | bool    | ❌    | Default `true`                                          |
+| `quality.face_clear`            | bool    | ❌    | Default `true`                                          |
 
 **Response `201 Created`:**
 
@@ -182,33 +334,29 @@ Menyimpan metadata video ke database setelah proses upload ke R2 selesai.
 
 ---
 
-### 3. Get Videos
+### 3. Get Videos (dengan filter & paginasi)
 
 **`GET /api/v1/videos`**
 
-Mengambil daftar video. Semua query params bersifat opsional dan bisa dikombinasikan.
+Mengambil daftar video dengan paginasi. Semua query parameter bersifat opsional.
 
 **Query Parameters:**
 
-| Parameter    | Nilai Valid                | Contoh             |
-| ------------ | -------------------------- | ------------------ |
-| `page`       | integer (default: 1)       | `?page=2`          |
-| `limit`      | integer (default: 40)      | `?limit=20`        |
-| `is_correct` | `true` / `false`           | `?is_correct=true` |
-| `type`       | `huruf` / `kata`           | `?type=huruf`      |
-| `label`      | teks bebas (partial match) | `?label=A`         |
+| Parameter    | Default | Nilai Valid                | Keterangan                          |
+| ------------ | ------- | -------------------------- | ----------------------------------- |
+| `page`       | `1`     | integer positif            | Halaman yang diambil                |
+| `limit`      | `40`    | integer positif            | Jumlah item per halaman             |
+| `is_correct` | —       | `true` / `false`           | Filter berdasarkan validitas        |
+| `type`       | —       | `letter` / `word`          | Filter berdasarkan tipe gerakan     |
+| `label`      | —       | teks bebas                 | Partial match (case-insensitive)    |
 
-**Contoh kombinasi:**
+**Contoh penggunaan:**
 
-| Kasus                                | URL                                                     |
-| ------------------------------------ | ------------------------------------------------------- |
-| Semua video                          | `GET /api/v1/videos`                                    |
-| Video yang benar saja                | `GET /api/v1/videos?is_correct=true`                    |
-| Video yang salah saja                | `GET /api/v1/videos?is_correct=false`                   |
-| Video tipe huruf                     | `GET /api/v1/videos?type=huruf`                         |
-| Video tipe kata                      | `GET /api/v1/videos?type=kata`                          |
-| Video dengan label "A"               | `GET /api/v1/videos?label=A`                            |
-| Kombinasi: huruf + benar + label "B" | `GET /api/v1/videos?type=huruf&is_correct=true&label=B` |
+```
+GET /api/v1/videos
+GET /api/v1/videos?type=letter&is_correct=true&label=A
+GET /api/v1/videos?type=word&is_correct=false&page=2&limit=20
+```
 
 **Response `200 OK`:**
 
@@ -216,28 +364,50 @@ Mengambil daftar video. Semua query params bersifat opsional dan bisa dikombinas
 {
   "data": [
     {
-      "id": "550e8400-e29b-41d4-a716-446655440000",
-      "video_path": "Dataset/huruf/A/record_1748953317123.mp4",
-      "video_url": "https://pub-xxx.r2.dev/Dataset/huruf/A/record_1748953317123.mp4",
-      "name": "Budi",
-      "gender": "L",
-      "label": "A",
-      "type": "huruf",
-      "is_correct": true,
-      "notes": "Pelafalan jelas",
-      "created_at": "2026-06-05T10:00:00Z"
+      "sample_id": "550e8400-e29b-41d4-a716-446655440000",
+      "task_type": ["lr", "vlm"],
+      "created_at": "2026-06-11T15:00:00Z",
+      "media": {
+        "video_path": "Dataset/letter/A/record_1749646823000.mp4",
+        "video_url": "https://pub-xxx.r2.dev/Dataset/letter/A/record_1749646823000.mp4",
+        "duration_sec": 3.5,
+        "resolution_width": 1280,
+        "resolution_height": 720,
+        "capture_location": "indoor"
+      },
+      "label": {
+        "gesture_type": "letter",
+        "gesture_name": "A",
+        "target_id": "letter_A",
+        "bisindo_region": "Jawa Timur",
+        "bisindo_subregion": "Malang",
+        "is_correct": true,
+        "error_category": "",
+        "validated_by": "",
+        "reasoning": ""
+      },
+      "signer": {
+        "signer_name": "Bintang",
+        "gender": "female"
+      },
+      "quality": {
+        "hands_visible": true,
+        "face_visible": true,
+        "hands_clear": false,
+        "face_clear": false
+      }
     }
   ],
   "meta": {
     "current_page": 1,
     "limit": 40,
-    "total_items": 150,
+    "total_items": 160,
     "total_pages": 4
   }
 }
 ```
 
-> Field `label` menggunakan **partial match case-insensitive** (ILIKE). `?label=a` akan menemukan `"A"`, `"aa"`, dsb.
+> **Catatan:** `label.target_id` adalah nilai computed (`gesture_type + "_" + gesture_name`), tidak disimpan di database. Dibuat di level query SQL.
 
 ---
 
@@ -245,7 +415,7 @@ Mengambil daftar video. Semua query params bersifat opsional dan bisa dikombinas
 
 **`GET /api/v1/videos/:id`**
 
-Mengambil satu video berdasarkan UUID.
+Mengambil satu video berdasarkan `sample_id`.
 
 **Contoh:**
 
@@ -253,24 +423,7 @@ Mengambil satu video berdasarkan UUID.
 GET /api/v1/videos/550e8400-e29b-41d4-a716-446655440000
 ```
 
-**Response `200 OK`:**
-
-```json
-{
-  "data": {
-    "id": "550e8400-e29b-41d4-a716-446655440000",
-    "video_path": "Dataset/huruf/A/record_1748953317123.mp4",
-    "video_url": "https://pub-xxx.r2.dev/Dataset/huruf/A/record_1748953317123.mp4",
-    "name": "Budi",
-    "gender": "L",
-    "label": "A",
-    "type": "huruf",
-    "is_correct": true,
-    "notes": "Pelafalan jelas",
-    "created_at": "2026-06-05T10:00:00Z"
-  }
-}
-```
+**Response `200 OK`:** Struktur data sama dengan objek individual di endpoint `GET /api/v1/videos`.
 
 **Response `404 Not Found`:**
 
@@ -282,35 +435,60 @@ GET /api/v1/videos/550e8400-e29b-41d4-a716-446655440000
 
 ---
 
-### 5. Update Notes
+### 5. Update Metadata (Partial Update)
 
-**`PATCH /api/v1/videos/:id/notes`**
+**`PATCH /api/v1/videos/:id/metadata`**
 
-Memperbarui field `notes` pada video yang sudah ada.
+Melakukan **partial update** pada tabel `label` dan/atau `quality`. Hanya field yang dikirim yang akan diperbarui — field yang tidak dikirim tetap tidak berubah.
 
 **Contoh:**
 
 ```
-PATCH /api/v1/videos/550e8400-e29b-41d4-a716-446655440000/notes
+PATCH /api/v1/videos/550e8400-e29b-41d4-a716-446655440000/metadata
 ```
 
-**Request Body:**
+**Request Body** (semua field opsional, kirim hanya yang ingin diubah):
 
 ```json
 {
-  "notes": "Catatan lengkap mengenai kualitas rekaman video ini..."
+  "error_category": "handshape_wrong",
+  "validated_by": "Tim Anotasi",
+  "reasoning": "Bentuk tangan tidak tepat pada fase penahanan.",
+  "hands_visible": true,
+  "face_visible": true,
+  "hands_clear": false,
+  "face_clear": true
 }
 ```
 
-| Field   | Type   | Wajib | Keterangan                       |
-| ------- | ------ | ----- | -------------------------------- |
-| `notes` | string | ✅    | Catatan baru, tidak boleh kosong |
+| Field            | Type   | Keterangan                                             |
+| ---------------- | ------ | ------------------------------------------------------ |
+| `error_category` | string | Salah satu nilai dari `error_category_enum`            |
+| `validated_by`   | string | Nama validator                                         |
+| `reasoning`      | string | Catatan anotator / alasan penilaian                    |
+| `hands_visible`  | bool   | Apakah tangan terlihat di frame                        |
+| `face_visible`   | bool   | Apakah wajah terlihat di frame                         |
+| `hands_clear`    | bool   | Apakah tangan terlihat jelas (tidak blur/terpotong)    |
+| `face_clear`     | bool   | Apakah wajah terlihat jelas (tidak blur/terpotong)     |
+
+**Nilai valid untuk `error_category`:**
+
+| Nilai                          | Keterangan                          |
+| ------------------------------ | ----------------------------------- |
+| `handshape_wrong`              | Bentuk tangan salah                 |
+| `orientation_wrong`            | Orientasi tangan salah              |
+| `location_wrong`               | Lokasi tangan salah                 |
+| `movement_wrong`               | Gerakan salah                       |
+| `non_manual_marker_missing`    | Ekspresi wajah/penanda non-manual hilang |
+| `finger_spelling_incomplete`   | Ejaan jari tidak lengkap            |
+| `mixed_with_other_sign`        | Tercampur dengan gerakan lain       |
+| `unclear`                      | Tidak jelas                         |
 
 **Response `200 OK`:**
 
 ```json
 {
-  "message": "notes updated"
+  "message": "video review updated"
 }
 ```
 
@@ -326,7 +504,7 @@ PATCH /api/v1/videos/550e8400-e29b-41d4-a716-446655440000/notes
 
 ## Error Responses
 
-Semua error menggunakan format yang sama:
+Semua error menggunakan format yang konsisten:
 
 ```json
 {
@@ -334,26 +512,44 @@ Semua error menggunakan format yang sama:
 }
 ```
 
-| Status                      | Kapan terjadi                                                   |
-| --------------------------- | --------------------------------------------------------------- |
-| `400 Bad Request`           | Body JSON tidak valid / field wajib kosong / nilai tidak sesuai |
-| `404 Not Found`             | Data tidak ditemukan                                            |
-| `500 Internal Server Error` | Error database atau server                                      |
+| HTTP Status                 | Kapan Terjadi                                                    |
+| --------------------------- | ---------------------------------------------------------------- |
+| `400 Bad Request`           | Body JSON tidak valid / field wajib kosong / nilai enum salah    |
+| `404 Not Found`             | `sample_id` tidak ditemukan di database                          |
+| `500 Internal Server Error` | Error database, R2, atau server internal                         |
+
+---
+
+## Alur Lengkap Upload Video
+
+Berikut adalah alur kerja end-to-end dari frontend ke database:
+
+```
+1. [Frontend]  POST /api/v1/upload-url  { type, label }
+               ← { sample_id, video_path, video_url, upload_url }
+
+2. [Frontend]  PUT {upload_url}  (file .mp4, Content-Type: video/mp4)
+               ← 200 OK dari Cloudflare R2
+
+3. [Frontend]  POST /api/v1/videos  { sample_id, media, label, signer, quality }
+               ← 201 Created
+
+4. [Frontend]  PATCH /api/v1/videos/{sample_id}/metadata  { reasoning, hands_clear, ... }
+               ← 200 OK  (opsional, untuk review/anotasi selanjutnya)
+```
 
 ---
 
 ## Contoh di Postman
 
-| #   | Method | URL                                                         | Body                           |
-| --- | ------ | ----------------------------------------------------------- | ------------------------------ |
-| 1   | POST   | `/api/v1/upload-url`                                        | `{"type":"huruf","label":"A"}` |
-| 2   | POST   | `/api/v1/videos`                                            | JSON body                      |
-| 3   | GET    | `/api/v1/videos`                                            | —                              |
-| 4   | GET    | `/api/v1/videos?page=2&limit=20`                            | —                              |
-| 5   | GET    | `/api/v1/videos?is_correct=true`                            | —                              |
-| 6   | GET    | `/api/v1/videos?type=huruf`                                 | —                              |
-| 7   | GET    | `/api/v1/videos?label=A`                                    | —                              |
-| 8   | GET    | `/api/v1/videos?type=kata&is_correct=false&page=1`          | —                              |
-| 9   | GET    | `/api/v1/videos?type=huruf&is_correct=true&label=B`         | —                              |
-| 10  | GET    | `/api/v1/videos/550e8400-e29b-41d4-a716-446655440000`       | —                              |
-| 11  | PATCH  | `/api/v1/videos/550e8400-e29b-41d4-a716-446655440000/notes` | `{"notes":"Catatan baru..."}`  |
+| # | Method | URL                                    | Body / Params                             |
+| - | ------ | -------------------------------------- | ----------------------------------------- |
+| 1 | POST   | `/api/v1/upload-url`                   | `{ "type": "letter", "label": "A" }`     |
+| 2 | PUT    | `{upload_url dari response no.1}`      | File `.mp4` raw binary                    |
+| 3 | POST   | `/api/v1/videos`                       | JSON body lengkap (lihat endpoint no. 2)  |
+| 4 | GET    | `/api/v1/videos`                       | —                                         |
+| 5 | GET    | `/api/v1/videos?type=letter&label=A`   | —                                         |
+| 6 | GET    | `/api/v1/videos?is_correct=false`      | —                                         |
+| 7 | GET    | `/api/v1/videos?page=2&limit=20`       | —                                         |
+| 8 | GET    | `/api/v1/videos/{sample_id}`           | —                                         |
+| 9 | PATCH  | `/api/v1/videos/{sample_id}/metadata`  | `{ "reasoning": "...", "hands_clear": false }` |

@@ -14,23 +14,21 @@ func RegisterRoutes(
 	api := router.Group("/api/v1")
 
 	{
-		// Upload
+		// Upload Video to Cloudflare to generated URL
+		// POST api/v1/upload-url
 		api.POST(
 			"/upload-url",
 			videoHandler.GenerateUploadURL,
 		)
 
-		// Videos
+		// Create Video metadata
+		// POST api/v1/videos
 		api.POST(
 			"/videos",
 			videoHandler.CreateVideo,
 		)
 
 		// GET /api/v1/videos
-		// Query params (all optional, combinable):
-		//   ?is_correct=true|false
-		//   ?type=huruf|kata
-		//   ?label=<string>
 		api.GET(
 			"/videos",
 			videoHandler.GetVideos,
@@ -42,10 +40,10 @@ func RegisterRoutes(
 			videoHandler.GetVideoByID,
 		)
 
-		// PATCH /api/v1/videos/:id/notes
+		// PATCH /api/v1/videos/:id/metadata
 		api.PATCH(
-			"/videos/:id/notes",
-			videoHandler.UpdateNotes,
+			"/videos/:id/metadata",
+			videoHandler.UpdateMetadata,
 		)
 	}
 }

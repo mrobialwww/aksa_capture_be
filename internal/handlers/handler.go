@@ -48,7 +48,7 @@ func (h *VideoHandler) GenerateUploadURL(
 		return
 	}
 
-	id := uuid.New().String()
+	sampleID := uuid.New().String()
 	timestamp := time.Now().UnixMilli()
 
 	// Format: Dataset/{type}/{label}/record_{timestamp}.mp4
@@ -59,11 +59,7 @@ func (h *VideoHandler) GenerateUploadURL(
 		timestamp,
 	)
 
-	uploadURL, err :=
-		h.r2Service.GenerateUploadURL(
-			videoPath,
-		)
-
+	uploadURL, err := h.r2Service.GenerateUploadURL(videoPath)
 	if err != nil {
 		c.JSON(
 			http.StatusInternalServerError,
@@ -72,11 +68,19 @@ func (h *VideoHandler) GenerateUploadURL(
 		return
 	}
 
+	// Bangun public URL final video setelah di-upload
+	baseURL := h.publicURL
+	if baseURL != "" && baseURL[len(baseURL)-1] != '/' {
+		baseURL += "/"
+	}
+	videoURL := baseURL + videoPath
+
 	c.JSON(
 		http.StatusOK,
 		gin.H{
-			"id":         id,
+			"sample_id":  sampleID,
 			"video_path": videoPath,
+			"video_url":  videoURL,
 			"upload_url": uploadURL,
 		},
 	)
@@ -86,80 +90,59 @@ func (h *VideoHandler) GenerateUploadURL(
 func (h *VideoHandler) CreateVideo(
 	c *gin.Context,
 ) {
-
 	var req models.CreateVideoRequest
 
-	if err := c.ShouldBindJSON(
-		&req,
-	); err != nil {
-
+	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(
 			http.StatusBadRequest,
-			gin.H{
-				"message": err.Error(),
-			},
+			gin.H{"message": err.Error()},
 		)
-
 		return
 	}
 
-	video := models.Video{
-		ID:        req.ID,
-		VideoPath: req.VideoPath,
-		Name:      req.Name,
-		Gender:    req.Gender,
-		Label:     req.Label,
-		Type:      req.Type,
-		IsCorrect: req.IsCorrect,
-		Notes:     req.Notes,
+	// Tentukan task_type sesuai logic:
+	// jika is_correct true -> ["lr", "vlm"], jika false -> ["vlm"]
+	if req.Label.IsCorrect {
+		req.TaskType = []string{"lr", "vlm"}
+	} else {
+		req.TaskType = []string{"vlm"}
 	}
 
-	err := h.videoRepo.Create(
-		video,
-	)
-
+	// Execute creation in repository using request context
+	err := h.videoRepo.Create(c.Request.Context(), req)
 	if err != nil {
-
 		c.JSON(
 			http.StatusInternalServerError,
-			gin.H{
-				"message": err.Error(),
-			},
+			gin.H{"message": err.Error()},
 		)
-
 		return
 	}
 
 	c.JSON(
 		http.StatusCreated,
-		gin.H{
-			"message": "video metadata created",
-		},
+		gin.H{"message": "video metadata created"},
 	)
 }
 
 // GET /api/v1/videos
 // Supports optional query params: is_correct, type, label
-// If none provided, returns all videos.
 func (h *VideoHandler) GetVideos(
 	c *gin.Context,
 ) {
 	var filter models.VideoFilter
 
-	// Parse pagination
 	page := 1
 	if pageStr := c.Query("page"); pageStr != "" {
 		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
 			page = p
 		}
 	}
-	limit := 40 // default limit
+	limit := 40
 	if limitStr := c.Query("limit"); limitStr != "" {
 		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
 			limit = l
 		}
 	}
-	
 	filter.Page = page
 	filter.Limit = limit
 
@@ -176,10 +159,10 @@ func (h *VideoHandler) GetVideos(
 	}
 
 	if typeStr := c.Query("type"); typeStr != "" {
-		if typeStr != "huruf" && typeStr != "kata" {
+		if typeStr != "letter" && typeStr != "word" {
 			c.JSON(
 				http.StatusBadRequest,
-				gin.H{"message": "type must be 'huruf' or 'kata'"},
+				gin.H{"message": "type must be 'letter' or 'word'"},
 			)
 			return
 		}
@@ -190,22 +173,13 @@ func (h *VideoHandler) GetVideos(
 		filter.Label = labelStr
 	}
 
-	videos, totalItems, err := h.videoRepo.FindByFilter(filter)
-
+	videos, totalItems, err := h.videoRepo.FindByFilter(c.Request.Context(), filter)
 	if err != nil {
 		c.JSON(
 			http.StatusInternalServerError,
 			gin.H{"message": err.Error()},
 		)
 		return
-	}
-
-	for i := range videos {
-		baseURL := h.publicURL
-		if baseURL != "" && baseURL[len(baseURL)-1] != '/' {
-			baseURL += "/"
-		}
-		videos[i].VideoURL = baseURL + videos[i].VideoPath
 	}
 
 	totalPages := int(math.Ceil(float64(totalItems) / float64(limit)))
@@ -230,8 +204,7 @@ func (h *VideoHandler) GetVideoByID(
 ) {
 	id := c.Param("id")
 
-	video, err := h.videoRepo.FindByID(id)
-
+	video, err := h.videoRepo.FindByID(c.Request.Context(), id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			c.JSON(
@@ -248,26 +221,19 @@ func (h *VideoHandler) GetVideoByID(
 		return
 	}
 
-	baseURL := h.publicURL
-	if baseURL != "" && baseURL[len(baseURL)-1] != '/' {
-		baseURL += "/"
-	}
-	video.VideoURL = baseURL + video.VideoPath
-
 	c.JSON(
 		http.StatusOK,
 		gin.H{"data": video},
 	)
 }
 
-// PATCH /api/v1/videos/:id/notes
-func (h *VideoHandler) UpdateNotes(
+// PATCH /api/v1/videos/:id/metadata
+func (h *VideoHandler) UpdateMetadata(
 	c *gin.Context,
 ) {
 	id := c.Param("id")
 
-	var req models.UpdateNotesRequest
-
+	var req models.UpdateMetadataRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(
 			http.StatusBadRequest,
@@ -276,8 +242,7 @@ func (h *VideoHandler) UpdateNotes(
 		return
 	}
 
-	err := h.videoRepo.UpdateNotes(id, req.Notes)
-
+	err := h.videoRepo.UpdateMetadata(c.Request.Context(), id, req)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			c.JSON(
@@ -296,6 +261,6 @@ func (h *VideoHandler) UpdateNotes(
 
 	c.JSON(
 		http.StatusOK,
-		gin.H{"message": "notes updated"},
+		gin.H{"message": "video review updated"},
 	)
 }
