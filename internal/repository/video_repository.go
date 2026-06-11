@@ -242,13 +242,19 @@ func (r *VideoRepository) FindByFilter(
 		argIdx++
 	}
 
+	if filter.SignerName != "" {
+		conditions = append(conditions, fmt.Sprintf("s.signer_name ILIKE $%d", argIdx))
+		args = append(args, "%"+filter.SignerName+"%")
+		argIdx++
+	}
+
 	whereClause := ""
 	if len(conditions) > 0 {
 		whereClause = " WHERE " + strings.Join(conditions, " AND ")
 	}
 
-	// 1. Count query
-	countQuery := "SELECT COUNT(*) FROM videos v LEFT JOIN label l ON l.sample_id = v.sample_id" + whereClause
+	// 1. Count query (join label & signer agar WHERE clause bisa pakai kolom mereka)
+	countQuery := `SELECT COUNT(*) FROM videos v LEFT JOIN label l ON l.sample_id = v.sample_id LEFT JOIN signer s ON s.sample_id = v.sample_id` + whereClause
 	var totalItems int
 	err := r.DB.QueryRow(ctx, countQuery, args...).Scan(&totalItems)
 	if err != nil {
@@ -499,3 +505,46 @@ func (r *VideoRepository) UpdateMetadata(
 	return tx.Commit(ctx)
 }
 
+// Delete menghapus semua data terkait sample_id dari DB (semua tabel terkait)
+// dan mengembalikan video_path agar caller bisa menghapus file dari R2.
+func (r *VideoRepository) Delete(
+	ctx context.Context,
+	id string,
+) (videoPath string, err error) {
+	tx, err := r.DB.Begin(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer tx.Rollback(ctx)
+
+	// Ambil video_path sekaligus pastikan sample_id ada
+	err = tx.QueryRow(
+		ctx,
+		`SELECT COALESCE(m.video_path, '') FROM videos v LEFT JOIN media m ON m.sample_id = v.sample_id WHERE v.sample_id = $1`,
+		id,
+	).Scan(&videoPath)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return "", pgx.ErrNoRows
+		}
+		return "", fmt.Errorf("failed to fetch video path: %w", err)
+	}
+
+	// Hapus dari tabel-tabel anak (FK ke videos) lalu tabel induk
+	for _, q := range []string{
+		`DELETE FROM quality WHERE sample_id = $1`,
+		`DELETE FROM signer  WHERE sample_id = $1`,
+		`DELETE FROM label   WHERE sample_id = $1`,
+		`DELETE FROM media   WHERE sample_id = $1`,
+		`DELETE FROM videos  WHERE sample_id = $1`,
+	} {
+		if _, err = tx.Exec(ctx, q, id); err != nil {
+			return "", fmt.Errorf("delete failed (%s): %w", q, err)
+		}
+	}
+
+	if err = tx.Commit(ctx); err != nil {
+		return "", err
+	}
+	return videoPath, nil
+}

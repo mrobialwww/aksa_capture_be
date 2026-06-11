@@ -47,3 +47,12 @@ func (s *R2Service) GenerateUploadURL(
 
 	return req.URL, nil
 }
+
+// DeleteObject menghapus satu file dari R2 berdasarkan key (video_path).
+func (s *R2Service) DeleteObject(ctx context.Context, key string) error {
+	_, err := s.Client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: &s.Bucket,
+		Key:    &key,
+	})
+	return err
+}

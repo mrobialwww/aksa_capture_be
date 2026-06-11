@@ -45,5 +45,11 @@ func RegisterRoutes(
 			"/videos/:id/metadata",
 			videoHandler.UpdateMetadata,
 		)
+
+		// DELETE /api/v1/videos/:id
+		api.DELETE(
+			"/videos/:id",
+			videoHandler.DeleteVideo,
+		)
 	}
 }

@@ -173,6 +173,10 @@ func (h *VideoHandler) GetVideos(
 		filter.Label = labelStr
 	}
 
+	if signerNameStr := c.Query("signer_name"); signerNameStr != "" {
+		filter.SignerName = signerNameStr
+	}
+
 	videos, totalItems, err := h.videoRepo.FindByFilter(c.Request.Context(), filter)
 	if err != nil {
 		c.JSON(
@@ -262,5 +266,51 @@ func (h *VideoHandler) UpdateMetadata(
 	c.JSON(
 		http.StatusOK,
 		gin.H{"message": "video review updated"},
+	)
+}
+
+// DELETE /api/v1/videos/:id
+// Menghapus metadata dari semua tabel DB dan file dari R2 Cloudflare.
+func (h *VideoHandler) DeleteVideo(
+	c *gin.Context,
+) {
+	id := c.Param("id")
+
+	// 1. Hapus dari DB, dapatkan video_path untuk delete dari R2
+	videoPath, err := h.videoRepo.Delete(c.Request.Context(), id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			c.JSON(
+				http.StatusNotFound,
+				gin.H{"message": "video not found"},
+			)
+			return
+		}
+
+		c.JSON(
+			http.StatusInternalServerError,
+			gin.H{"message": err.Error()},
+		)
+		return
+	}
+
+	// 2. Hapus file dari R2 (hanya jika video_path tidak kosong)
+	if videoPath != "" {
+		if err := h.r2Service.DeleteObject(c.Request.Context(), videoPath); err != nil {
+			// DB sudah terhapus; log error R2 tapi tetap return 200 dengan peringatan
+			c.JSON(
+				http.StatusOK,
+				gin.H{
+					"message":  "video metadata deleted, but failed to delete file from R2",
+					"r2_error": err.Error(),
+				},
+			)
+			return
+		}
+	}
+
+	c.JSON(
+		http.StatusOK,
+		gin.H{"message": "video deleted successfully"},
 	)
 }

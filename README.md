@@ -205,6 +205,7 @@ CREATE TABLE quality (
 | `GET`   | `/api/v1/videos`               | Ambil daftar video (dengan filter opsional)  |
 | `GET`   | `/api/v1/videos/:id`           | Ambil satu video berdasarkan `sample_id`     |
 | `PATCH` | `/api/v1/videos/:id/metadata`  | Partial update label & quality video         |
+| `DELETE`| `/api/v1/videos/:id`           | Hapus metadata di DB & file video di R2      |
 
 ---
 
@@ -349,6 +350,7 @@ Mengambil daftar video dengan paginasi. Semua query parameter bersifat opsional.
 | `is_correct` | —       | `true` / `false`           | Filter berdasarkan validitas        |
 | `type`       | —       | `letter` / `word`          | Filter berdasarkan tipe gerakan     |
 | `label`      | —       | teks bebas                 | Partial match (case-insensitive)    |
+| `signer_name`| —       | teks bebas                 | Partial match nama peraga           |
 
 **Contoh penggunaan:**
 
@@ -356,6 +358,7 @@ Mengambil daftar video dengan paginasi. Semua query parameter bersifat opsional.
 GET /api/v1/videos
 GET /api/v1/videos?type=letter&is_correct=true&label=A
 GET /api/v1/videos?type=word&is_correct=false&page=2&limit=20
+GET /api/v1/videos?signer_name=budi
 ```
 
 **Response `200 OK`:**
@@ -502,6 +505,46 @@ PATCH /api/v1/videos/550e8400-e29b-41d4-a716-446655440000/metadata
 
 ---
 
+### 6. Delete Video
+
+**`DELETE /api/v1/videos/:id`**
+
+Menghapus metadata video dari database secara menyeluruh (dari semua tabel terkait) **DAN** menghapus file video asli dari Cloudflare R2 secara otomatis.
+
+**Contoh:**
+
+```
+DELETE /api/v1/videos/550e8400-e29b-41d4-a716-446655440000
+```
+
+**Response `200 OK` (Sukses):**
+
+```json
+{
+  "message": "video deleted successfully"
+}
+```
+
+**Response `200 OK` (Sukses hapus DB, Gagal hapus di R2):**
+Jika metadata di DB berhasil dihapus, namun terjadi error saat menghapus file di R2 (misalnya network issue ke AWS SDK), maka endpoint tetap akan mengembalikan HTTP 200 namun menyertakan properti `r2_error`.
+
+```json
+{
+  "message": "video metadata deleted, but failed to delete file from R2",
+  "r2_error": "pesan error dari AWS SDK"
+}
+```
+
+**Response `404 Not Found`:**
+
+```json
+{
+  "message": "video not found"
+}
+```
+
+---
+
 ## Error Responses
 
 Semua error menggunakan format yang konsisten:
@@ -551,5 +594,7 @@ Berikut adalah alur kerja end-to-end dari frontend ke database:
 | 5 | GET    | `/api/v1/videos?type=letter&label=A`   | —                                         |
 | 6 | GET    | `/api/v1/videos?is_correct=false`      | —                                         |
 | 7 | GET    | `/api/v1/videos?page=2&limit=20`       | —                                         |
-| 8 | GET    | `/api/v1/videos/{sample_id}`           | —                                         |
-| 9 | PATCH  | `/api/v1/videos/{sample_id}/metadata`  | `{ "reasoning": "...", "hands_clear": false }` |
+| 8 | GET    | `/api/v1/videos?signer_name=budi`      | —                                         |
+| 9 | GET    | `/api/v1/videos/{sample_id}`           | —                                         |
+| 10| PATCH  | `/api/v1/videos/{sample_id}/metadata`  | `{ "reasoning": "...", "hands_clear": false }` |
+| 11| DELETE | `/api/v1/videos/{sample_id}`           | —                                         |
