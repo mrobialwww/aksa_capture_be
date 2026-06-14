@@ -284,9 +284,7 @@ Menyimpan metadata video secara atomik ke semua tabel (`videos`, `media`, `label
       "subregion": "Malang"
     },
     "is_correct": true,
-    "error_category": null,
-    "validated_by": null,
-    "reasoning": null
+    "error_category": null
   },
   "signer": {
     "signer_name": "Bintang",
@@ -316,8 +314,6 @@ Menyimpan metadata video secara atomik ke semua tabel (`videos`, `media`, `label
 | `label.bisindo_region_version`  | object  | ✅    | `{ region, subregion }` — asal daerah dialek BISINDO   |
 | `label.is_correct`              | bool    | ❌    | Default `true`. Menentukan `task_type` secara otomatis |
 | `label.error_category`          | string  | ❌    | Diisi jika `is_correct: false` (lihat ENUM di atas)    |
-| `label.validated_by`            | string  | ❌    | Nama validator                                          |
-| `label.reasoning`               | string  | ❌    | Catatan anotator                                        |
 | `signer.signer_name`            | string  | ✅    | Nama lengkap peraga                                     |
 | `signer.gender`                 | string  | ✅    | `"male"` atau `"female"`                               |
 | `quality.hands_visible`         | bool    | ❌    | Default `true`                                          |
