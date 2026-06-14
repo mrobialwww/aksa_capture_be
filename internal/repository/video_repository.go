@@ -74,9 +74,10 @@ func (r *VideoRepository) Create(
 		`
 		INSERT INTO label (
 			sample_id, gesture_type, gesture_name, 
-			bisindo_region, bisindo_subregion, is_correct
+			bisindo_region, bisindo_subregion, is_correct,
+			error_category
 		)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		`,
 		req.SampleID,
 		req.Label.GestureType,
@@ -84,6 +85,7 @@ func (r *VideoRepository) Create(
 		req.Label.BisindoRegionVersion.Region,
 		req.Label.BisindoRegionVersion.Subregion,
 		req.Label.IsCorrect,
+		req.Label.ErrorCategory,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to insert label: %w", err)

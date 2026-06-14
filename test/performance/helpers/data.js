@@ -32,6 +32,7 @@ export function buildCreateVideoPayload(sampleId, videoPath, videoUrl) {
   const errorCategories = [
     'handshape_wrong', 'orientation_wrong', 'location_wrong',
     'movement_wrong',  'non_manual_marker_missing', 'unclear',
+    'finger_spelling_incomplete', 'mixed_with_other_sign',
   ];
 
   return {
