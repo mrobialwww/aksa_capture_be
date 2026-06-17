@@ -1,0 +1,3 @@
+# Mengabaikan semua file javascript di dalam folder test agar tidak dihitung di statistik bahasa GitHub
+test/performance/**/*.js linguist-vendored
+*.js linguist-detectable=false
