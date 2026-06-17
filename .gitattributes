@@ -1,4 +1,6 @@
-# Mengabaikan semua file javascript agar tidak dihitung di statistik bahasa GitHub
-*.js linguist-vendored=true
-*.js linguist-generated=true
-test/performance/** linguist-vendored=true
+# Mengabaikan semua file javascript dan testing agar tidak dihitung di statistik bahasa GitHub
+*.js linguist-vendored
+*.js linguist-generated
+**/*.js linguist-vendored
+test/performance/** linguist-vendored
+test/** linguist-vendored
