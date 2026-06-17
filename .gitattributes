@@ -1,3 +1,4 @@
-# Mengabaikan semua file javascript di dalam folder test agar tidak dihitung di statistik bahasa GitHub
-test/performance/**/*.js linguist-vendored
-*.js linguist-detectable=false
+# Mengabaikan semua file javascript agar tidak dihitung di statistik bahasa GitHub
+*.js linguist-vendored=true
+*.js linguist-generated=true
+test/performance/** linguist-vendored=true
