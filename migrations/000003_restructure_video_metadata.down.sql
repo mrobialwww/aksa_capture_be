@@ -9,12 +9,14 @@ DROP TABLE IF EXISTS media;
 
 DROP TABLE IF EXISTS videos;
 
--- 2. Hapus ENUMs baru
+-- 2. Hapus ENUMs dan Functions baru
 DROP TYPE IF EXISTS error_category_enum;
 
 DROP TYPE IF EXISTS gesture_type_enum;
 
 DROP TYPE IF EXISTS capture_location_enum;
+
+DROP FUNCTION IF EXISTS update_updated_at_column();
 
 -- 3. Kembalikan enum dan tabel monolitik lama
 CREATE TYPE video_type AS ENUM ('huruf', 'kata');

@@ -26,14 +26,25 @@ CREATE TYPE error_category_enum AS ENUM (
 
 CREATE TYPE capture_location_enum AS ENUM ('indoor', 'outdoor');
 
+-- 1d. Buat fungsi trigger untuk auto-update updated_at
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
 -- 2. Create new tables
 
 -- 2a. videos — core identity
 CREATE TABLE videos (
     sample_id  TEXT        PRIMARY KEY,
     task_type  TEXT[]      NOT NULL DEFAULT '{}',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE TRIGGER update_videos_updated_at BEFORE UPDATE ON videos FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- 2b. media — video file & recording context
 -- sample_id sebagai PK langsung karena relasi 1:1 dengan videos
@@ -44,8 +55,11 @@ CREATE TABLE media (
     duration_sec     FLOAT,
     resolution_width  INT,
     resolution_height INT,
-    capture_location capture_location_enum
+    capture_location capture_location_enum,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE TRIGGER update_media_updated_at BEFORE UPDATE ON media FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- 2c. label — annotation / ground-truth info
 -- target_id dihitung di query: gesture_type::text || '_' || gesture_name
@@ -58,15 +72,21 @@ CREATE TABLE label (
     is_correct        BOOLEAN NOT NULL DEFAULT TRUE,
     error_category    error_category_enum,
     validated_by      VARCHAR(255),
-    reasoning         TEXT
+    reasoning         TEXT,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE TRIGGER update_label_updated_at BEFORE UPDATE ON label FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- 2d. signer — person who performed the sign
 CREATE TABLE signer (
     sample_id   TEXT PRIMARY KEY REFERENCES videos (sample_id) ON DELETE CASCADE,
     signer_name VARCHAR(255),
-    gender      VARCHAR(50)
+    gender      VARCHAR(50),
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE TRIGGER update_signer_updated_at BEFORE UPDATE ON signer FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- 2e. quality — recording quality flags
 CREATE TABLE quality (
@@ -74,5 +94,8 @@ CREATE TABLE quality (
     hands_visible BOOLEAN NOT NULL DEFAULT TRUE,
     face_visible  BOOLEAN NOT NULL DEFAULT TRUE,
     hands_clear   BOOLEAN NOT NULL DEFAULT TRUE,
-    face_clear    BOOLEAN NOT NULL DEFAULT TRUE
+    face_clear    BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE TRIGGER update_quality_updated_at BEFORE UPDATE ON quality FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

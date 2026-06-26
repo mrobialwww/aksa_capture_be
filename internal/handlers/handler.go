@@ -461,14 +461,14 @@ func (h *VideoHandler) BatchGenerateUploadURL(c *gin.Context) {
 
 	for _, item := range req.Items {
 		sampleID := uuid.New().String()
-		timestamp := time.Now().UnixMilli()
 
-		// Format: Dataset/{type}/{label}/record_{timestamp}.mp4
+		// Format: Dataset/{type}/{label}/record_{sampleID}.mp4
+		// Menggunakan sampleID (UUID) bukan timestamp agar unik meski diproses dalam loop cepat.
 		videoPath := fmt.Sprintf(
-			"Dataset/%s/%s/record_%d.mp4",
+			"Dataset/%s/%s/record_%s.mp4",
 			item.Type,
 			item.Label,
-			timestamp,
+			sampleID,
 		)
 
 		uploadURL, err := h.r2Service.GenerateUploadURL(videoPath)
