@@ -28,6 +28,13 @@ func RegisterRoutes(
 			videoHandler.CreateVideo,
 		)
 
+		// Batch create Video metadata (max 20)
+		// POST api/v1/videos/batch
+		api.POST(
+			"/videos/batch",
+			videoHandler.BatchCreateVideo,
+		)
+
 		// GET /api/v1/videos
 		api.GET(
 			"/videos",
@@ -50,6 +57,20 @@ func RegisterRoutes(
 		api.DELETE(
 			"/videos/:id",
 			videoHandler.DeleteVideo,
+		)
+
+		// GET /api/v1/sample
+		// Mengambil 5 video per huruf (a-z) dan 5 video per kata dari daftar kata
+		api.GET(
+			"/sample",
+			videoHandler.GetSample,
+		)
+
+		// POST /api/v1/upload-url/batch
+		// Generate upload URL untuk banyak video sekaligus (max 20)
+		api.POST(
+			"/upload-url/batch",
+			videoHandler.BatchGenerateUploadURL,
 		)
 	}
 }

@@ -201,9 +201,12 @@ CREATE TABLE quality (
 | Method  | Endpoint                       | Deskripsi                                    |
 | ------- | ------------------------------ | -------------------------------------------- |
 | `POST`  | `/api/v1/upload-url`           | Generate presigned URL untuk upload ke R2    |
+| `POST`  | `/api/v1/upload-url/batch`     | Generate banyak presigned URL sekaligus      |
 | `POST`  | `/api/v1/videos`               | Simpan metadata video setelah upload selesai |
+| `POST`  | `/api/v1/videos/batch`         | Simpan metadata untuk banyak video sekaligus |
 | `GET`   | `/api/v1/videos`               | Ambil daftar video (dengan filter opsional)  |
 | `GET`   | `/api/v1/videos/:id`           | Ambil satu video berdasarkan `sample_id`     |
+| `GET`   | `/api/v1/sample`               | Ambil 5 sample video per huruf dan per kata  |
 | `PATCH` | `/api/v1/videos/:id/metadata`  | Partial update label & quality video         |
 | `DELETE`| `/api/v1/videos/:id`           | Hapus metadata di DB & file video di R2      |
 
@@ -252,6 +255,40 @@ Membuat `sample_id` baru dan presigned URL untuk upload video langsung ke Cloudf
 **Alur Upload:**
 1. `PUT {upload_url}` — upload file `.mp4` dengan `Content-Type: video/mp4`
 2. `POST /api/v1/videos` — kirim metadata setelah upload berhasil
+
+---
+
+### 1b. Batch Generate Upload URL
+
+**`POST /api/v1/upload-url/batch`**
+
+Generate upload URL untuk banyak video sekaligus (maksimal 20).
+
+**Request Body:**
+
+```json
+{
+  "items": [
+    { "type": "letter", "label": "A" },
+    { "type": "word", "label": "perkenalkan" }
+  ]
+}
+```
+
+**Response `200 OK`:**
+
+```json
+{
+  "data": [
+    {
+      "sample_id": "...",
+      "video_path": "...",
+      "video_url": "...",
+      "upload_url": "..."
+    }
+  ]
+}
+```
 
 ---
 
@@ -326,6 +363,51 @@ Menyimpan metadata video secara atomik ke semua tabel (`videos`, `media`, `label
 ```json
 {
   "message": "video metadata created"
+}
+```
+
+---
+
+### 2b. Batch Create Video Metadata
+
+**`POST /api/v1/videos/batch`**
+
+Menyimpan metadata untuk banyak video sekaligus (maksimal 20 item). 
+Setiap item diproses secara berurutan. Jika ada satu item yang gagal, item lainnya tetap akan diproses (partial success).
+
+**Request Body:**
+
+```json
+{
+  "items": [
+    {
+      "sample_id": "...",
+      "media": { /* lihat field media di endpoint POST /videos */ },
+      "label": { /* lihat field label di endpoint POST /videos */ },
+      "signer": { /* lihat field signer di endpoint POST /videos */ },
+      "quality": { /* lihat field quality di endpoint POST /videos */ }
+    }
+  ]
+}
+```
+> Struktur objek setiap item di dalam array `items` persis sama dengan request body pada endpoint `POST /api/v1/videos`.
+
+**Response `201 Created` (Jika semua sukses):**
+Atau **`207 Multi-Status` (Jika ada yang gagal):**
+
+```json
+{
+  "results": [
+    {
+      "sample_id": "1234-abcd",
+      "status": "success"
+    },
+    {
+      "sample_id": "5678-efgh",
+      "status": "error",
+      "message": "error description"
+    }
+  ]
 }
 ```
 
@@ -429,6 +511,35 @@ GET /api/v1/videos/550e8400-e29b-41d4-a716-446655440000
 ```json
 {
   "message": "video not found"
+}
+```
+
+---
+
+### 4b. Get Sample Videos
+
+**`GET /api/v1/sample`**
+
+Mengambil masing-masing 5 video sample untuk huruf (a-z) dan 5 video sample untuk daftar kata tertentu. Data otomatis dikelompokkan berdasarkan nama huruf/kata dan diurutkan.
+
+**Response `200 OK`:**
+
+```json
+{
+  "letters": [
+    {
+      "gesture_type": "letter",
+      "gesture_name": "a",
+      "videos": [ { /* objek video 1 */ }, { /* objek video 2 */ } ]
+    }
+  ],
+  "words": [
+    {
+      "gesture_type": "word",
+      "gesture_name": "halo",
+      "videos": [ { /* objek video 1 */ } ]
+    }
+  ]
 }
 ```
 
@@ -584,13 +695,16 @@ Berikut adalah alur kerja end-to-end dari frontend ke database:
 | # | Method | URL                                    | Body / Params                             |
 | - | ------ | -------------------------------------- | ----------------------------------------- |
 | 1 | POST   | `/api/v1/upload-url`                   | `{ "type": "letter", "label": "A" }`     |
-| 2 | PUT    | `{upload_url dari response no.1}`      | File `.mp4` raw binary                    |
-| 3 | POST   | `/api/v1/videos`                       | JSON body lengkap (lihat endpoint no. 2)  |
-| 4 | GET    | `/api/v1/videos`                       | —                                         |
-| 5 | GET    | `/api/v1/videos?type=letter&label=A`   | —                                         |
-| 6 | GET    | `/api/v1/videos?is_correct=false`      | —                                         |
-| 7 | GET    | `/api/v1/videos?page=2&limit=20`       | —                                         |
-| 8 | GET    | `/api/v1/videos?signer_name=budi`      | —                                         |
-| 9 | GET    | `/api/v1/videos/{sample_id}`           | —                                         |
-| 10| PATCH  | `/api/v1/videos/{sample_id}/metadata`  | `{ "reasoning": "...", "hands_clear": false }` |
-| 11| DELETE | `/api/v1/videos/{sample_id}`           | —                                         |
+| 2 | POST   | `/api/v1/upload-url/batch`             | `{ "items": [ ... ] }`                    |
+| 3 | PUT    | `{upload_url dari response no.1/no.2}` | File `.mp4` raw binary                    |
+| 4 | POST   | `/api/v1/videos`                       | JSON body lengkap (lihat endpoint no. 2)  |
+| 5 | POST   | `/api/v1/videos/batch`                 | `{ "items": [ ... ] }`                    |
+| 6 | GET    | `/api/v1/videos`                       | —                                         |
+| 7 | GET    | `/api/v1/videos?type=letter&label=A`   | —                                         |
+| 8 | GET    | `/api/v1/videos?is_correct=false`      | —                                         |
+| 9 | GET    | `/api/v1/videos?page=2&limit=20`       | —                                         |
+| 10| GET    | `/api/v1/videos?signer_name=budi`      | —                                         |
+| 11| GET    | `/api/v1/videos/{sample_id}`           | —                                         |
+| 12| GET    | `/api/v1/sample`                       | —                                         |
+| 13| PATCH  | `/api/v1/videos/{sample_id}/metadata`  | `{ "reasoning": "...", "hands_clear": false }` |
+| 14| DELETE | `/api/v1/videos/{sample_id}`           | —                                         |

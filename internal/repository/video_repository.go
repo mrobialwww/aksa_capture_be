@@ -507,6 +507,67 @@ func (r *VideoRepository) UpdateMetadata(
 	return tx.Commit(ctx)
 }
 
+// FindSample mengambil video untuk daftar gesture_name tertentu,
+// dibatasi sebanyak `limit` video per gesture_name.
+// Digunakan untuk endpoint GET /api/v1/sample.
+func (r *VideoRepository) FindSample(
+	ctx context.Context,
+	gestureType string,
+	names []string,
+	limit int,
+) ([]models.Video, error) {
+	if len(names) == 0 {
+		return []models.Video{}, nil
+	}
+
+	// Buat placeholder $1, $2, ... untuk IN clause
+	placeholders := make([]string, len(names))
+	args := []any{gestureType, limit}
+	for i, name := range names {
+		placeholders[i] = fmt.Sprintf("$%d", i+3) // $3, $4, ...
+		args = append(args, name)
+	}
+	inClause := strings.Join(placeholders, ", ")
+
+	query := fmt.Sprintf(`
+		WITH ranked AS (
+			SELECT
+				v.sample_id, v.task_type, v.created_at,
+				m.video_path, m.video_url, m.duration_sec, m.resolution_width, m.resolution_height, m.capture_location,
+				l.gesture_type, l.gesture_name, (l.gesture_type::text || '_' || l.gesture_name) AS target_id,
+				l.bisindo_region, l.bisindo_subregion, l.is_correct, l.error_category, l.validated_by, l.reasoning,
+				s.signer_name, s.gender,
+				q.hands_visible, q.face_visible, q.hands_clear, q.face_clear,
+				ROW_NUMBER() OVER (PARTITION BY l.gesture_name ORDER BY v.created_at DESC) AS rn
+			FROM videos v
+			LEFT JOIN media   m ON m.sample_id = v.sample_id
+			LEFT JOIN label   l ON l.sample_id = v.sample_id
+			LEFT JOIN signer  s ON s.sample_id = v.sample_id
+			LEFT JOIN quality q ON q.sample_id = v.sample_id
+			WHERE l.gesture_type = $1
+			  AND l.gesture_name IN (%s)
+		)
+		SELECT
+			sample_id, task_type, created_at,
+			video_path, video_url, duration_sec, resolution_width, resolution_height, capture_location,
+			gesture_type, gesture_name, target_id,
+			bisindo_region, bisindo_subregion, is_correct, error_category, validated_by, reasoning,
+			signer_name, gender,
+			hands_visible, face_visible, hands_clear, face_clear
+		FROM ranked
+		WHERE rn <= $2
+		ORDER BY gesture_name, rn
+	`, inClause)
+
+	rows, err := r.DB.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("FindSample query error: %w", err)
+	}
+	defer rows.Close()
+
+	return scanVideos(rows)
+}
+
 // Delete menghapus semua data terkait sample_id dari DB (semua tabel terkait)
 // dan mengembalikan video_path agar caller bisa menghapus file dari R2.
 func (r *VideoRepository) Delete(

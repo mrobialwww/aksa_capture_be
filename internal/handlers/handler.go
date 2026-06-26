@@ -124,6 +124,55 @@ func (h *VideoHandler) CreateVideo(
 	)
 }
 
+// POST /api/v1/videos/batch
+// Membuat metadata untuk banyak video sekaligus (maksimal 20).
+// Setiap item diproses secara berurutan; jika satu gagal, item lain tetap diproses.
+// Response berisi per-item status "success" atau "error".
+func (h *VideoHandler) BatchCreateVideo(c *gin.Context) {
+	var req models.BatchCreateVideoRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+		return
+	}
+
+	results := make([]models.BatchCreateVideoResult, 0, len(req.Items))
+	hasError := false
+
+	for i := range req.Items {
+		item := &req.Items[i]
+
+		// Tentukan task_type sesuai logic: is_correct true -> ["lr","vlm"], false -> ["vlm"]
+		if item.Label.IsCorrect {
+			item.TaskType = []string{"lr", "vlm"}
+		} else {
+			item.TaskType = []string{"vlm"}
+		}
+
+		err := h.videoRepo.Create(c.Request.Context(), *item)
+		if err != nil {
+			hasError = true
+			results = append(results, models.BatchCreateVideoResult{
+				SampleID: item.SampleID,
+				Status:   "error",
+				Message:  err.Error(),
+			})
+		} else {
+			results = append(results, models.BatchCreateVideoResult{
+				SampleID: item.SampleID,
+				Status:   "success",
+			})
+		}
+	}
+
+	statusCode := http.StatusCreated
+	if hasError {
+		statusCode = http.StatusMultiStatus // 207 — partial success
+	}
+
+	c.JSON(statusCode, gin.H{"results": results})
+}
+
 // GET /api/v1/videos
 // Supports optional query params: is_correct, type, label
 func (h *VideoHandler) GetVideos(
@@ -313,4 +362,134 @@ func (h *VideoHandler) DeleteVideo(
 		http.StatusOK,
 		gin.H{"message": "video deleted successfully"},
 	)
+}
+
+// GET /api/v1/sample
+// Mengambil 5 video sample untuk setiap huruf (a-z) dan setiap kata dari daftar kata yang ditentukan.
+func (h *VideoHandler) GetSample(c *gin.Context) {
+	const sampleLimit = 5
+
+	letters := []string{
+		"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m",
+		"n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z",
+	}
+
+	words := []string{
+		"selamat pagi", "selamat siang", "selamat sore", "selamat malam",
+		"aku", "saya", "kamu", "dari", "mana", "berasal",
+		"halo", "kabar", "apa", "siapa", "perkenalkan",
+		"nama", "sayang", "marah",
+	}
+
+	// Fetch letter samples
+	letterVideos, err := h.videoRepo.FindSample(c.Request.Context(), "letter", letters, sampleLimit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
+		return
+	}
+
+	// Fetch word samples
+	wordVideos, err := h.videoRepo.FindSample(c.Request.Context(), "word", words, sampleLimit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
+		return
+	}
+
+	// Group letter videos by gesture_name
+	letterMap := make(map[string]*models.SampleItem)
+	for _, letter := range letters {
+		letterMap[letter] = &models.SampleItem{
+			GestureType: "letter",
+			GestureName: letter,
+			Videos:      []models.Video{},
+		}
+	}
+	for _, v := range letterVideos {
+		if item, ok := letterMap[v.Label.GestureName]; ok {
+			item.Videos = append(item.Videos, v)
+		}
+	}
+
+	// Group word videos by gesture_name
+	wordMap := make(map[string]*models.SampleItem)
+	for _, word := range words {
+		wordMap[word] = &models.SampleItem{
+			GestureType: "word",
+			GestureName: word,
+			Videos:      []models.Video{},
+		}
+	}
+	for _, v := range wordVideos {
+		if item, ok := wordMap[v.Label.GestureName]; ok {
+			item.Videos = append(item.Videos, v)
+		}
+	}
+
+	// Build ordered slices (preserving the original order)
+	letterItems := make([]models.SampleItem, 0, len(letters))
+	for _, letter := range letters {
+		letterItems = append(letterItems, *letterMap[letter])
+	}
+
+	wordItems := make([]models.SampleItem, 0, len(words))
+	for _, word := range words {
+		wordItems = append(wordItems, *wordMap[word])
+	}
+
+	c.JSON(http.StatusOK, models.SampleResponse{
+		Letters: letterItems,
+		Words:   wordItems,
+	})
+}
+
+// POST /api/v1/upload-url/batch
+// Generate upload URL untuk banyak video sekaligus (maksimal 20).
+func (h *VideoHandler) BatchGenerateUploadURL(c *gin.Context) {
+	var req models.BatchUploadURLRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+		return
+	}
+
+	baseURL := h.publicURL
+	if baseURL != "" && baseURL[len(baseURL)-1] != '/' {
+		baseURL += "/"
+	}
+
+	results := make([]models.BatchUploadURLResponseItem, 0, len(req.Items))
+
+	for _, item := range req.Items {
+		sampleID := uuid.New().String()
+		timestamp := time.Now().UnixMilli()
+
+		// Format: Dataset/{type}/{label}/record_{timestamp}.mp4
+		videoPath := fmt.Sprintf(
+			"Dataset/%s/%s/record_%d.mp4",
+			item.Type,
+			item.Label,
+			timestamp,
+		)
+
+		uploadURL, err := h.r2Service.GenerateUploadURL(videoPath)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"message": fmt.Sprintf("failed to generate upload URL for %s/%s: %s", item.Type, item.Label, err.Error()),
+			})
+			return
+		}
+
+		videoURL := baseURL + videoPath
+
+		results = append(results, models.BatchUploadURLResponseItem{
+			SampleID:  sampleID,
+			VideoPath: videoPath,
+			VideoURL:  videoURL,
+			UploadURL: uploadURL,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data": results,
+	})
 }
