@@ -3,6 +3,7 @@ module aksa_capture_be
 go 1.25.0
 
 require (
+	github.com/abema/go-mp4 v1.7.1 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.41.11 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.12 // indirect
 	github.com/aws/aws-sdk-go-v2/config v1.32.22 // indirect

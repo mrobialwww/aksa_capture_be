@@ -1,9 +1,11 @@
 package services
 
 import (
+	"bytes"
 	"context"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
@@ -37,7 +39,7 @@ func (s *R2Service) GenerateUploadURL(
 			Key:    &key,
 		},
 		func(opts *s3.PresignOptions) {
-			opts.Expires = 15 * time.Minute
+			opts.Expires = 60 * time.Minute
 		},
 	)
 
@@ -46,6 +48,17 @@ func (s *R2Service) GenerateUploadURL(
 	}
 
 	return req.URL, nil
+}
+
+// UploadVideo mengupload file langsung ke R2 dari server (tanpa presigned URL).
+func (s *R2Service) UploadVideo(ctx context.Context, key string, data []byte, contentType string) error {
+	_, err := s.Client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket:      &s.Bucket,
+		Key:         &key,
+		Body:        bytes.NewReader(data),
+		ContentType: aws.String(contentType),
+	})
+	return err
 }
 
 // DeleteObject menghapus satu file dari R2 berdasarkan key (video_path).
