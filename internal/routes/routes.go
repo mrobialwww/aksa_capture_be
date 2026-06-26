@@ -35,13 +35,6 @@ func RegisterRoutes(
 			videoHandler.BatchCreateVideo,
 		)
 
-		// Direct upload with audio stripping
-		// POST api/v1/videos/direct-upload
-		api.POST(
-			"/videos/direct-upload",
-			videoHandler.DirectUpload,
-		)
-
 		// GET /api/v1/videos
 		api.GET(
 			"/videos",

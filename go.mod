@@ -3,11 +3,19 @@ module aksa_capture_be
 go 1.25.0
 
 require (
-	github.com/abema/go-mp4 v1.7.1 // indirect
-	github.com/aws/aws-sdk-go-v2 v1.41.11 // indirect
+	github.com/aws/aws-sdk-go-v2 v1.41.11
+	github.com/aws/aws-sdk-go-v2/config v1.32.22
+	github.com/aws/aws-sdk-go-v2/credentials v1.19.21
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.103.1
+	github.com/gin-contrib/cors v1.7.7
+	github.com/gin-gonic/gin v1.12.0
+	github.com/google/uuid v1.6.0
+	github.com/jackc/pgx/v5 v5.10.0
+	github.com/joho/godotenv v1.5.1
+)
+
+require (
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.12 // indirect
-	github.com/aws/aws-sdk-go-v2/config v1.32.22 // indirect
-	github.com/aws/aws-sdk-go-v2/credentials v1.19.21 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.27 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.27 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.27 // indirect
@@ -16,7 +24,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.9.20 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.27 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.19.27 // indirect
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.103.1 // indirect
 	github.com/aws/aws-sdk-go-v2/service/signin v1.1.3 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.31.1 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.36.4 // indirect
@@ -27,20 +34,15 @@ require (
 	github.com/bytedance/sonic/loader v0.5.1 // indirect
 	github.com/cloudwego/base64x v0.1.7 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.13 // indirect
-	github.com/gin-contrib/cors v1.7.7 // indirect
 	github.com/gin-contrib/sse v1.1.1 // indirect
-	github.com/gin-gonic/gin v1.12.0 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-playground/validator/v10 v10.30.3 // indirect
 	github.com/goccy/go-json v0.10.6 // indirect
 	github.com/goccy/go-yaml v1.19.2 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
-	github.com/jackc/pgx/v5 v5.10.0 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
-	github.com/joho/godotenv v1.5.1 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect

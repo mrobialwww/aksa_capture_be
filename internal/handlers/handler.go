@@ -19,7 +19,6 @@ import (
 type VideoHandler struct {
 	videoRepo      *repository.VideoRepository
 	r2Service      *services.R2Service
-	videoProcessor *services.VideoProcessor
 	publicURL      string
 }
 
@@ -31,7 +30,6 @@ func NewVideoHandler(
 	return &VideoHandler{
 		videoRepo:      videoRepo,
 		r2Service:      r2Service,
-		videoProcessor: services.NewVideoProcessor(),
 		publicURL:      publicURL,
 	}
 }
@@ -496,112 +494,3 @@ func (h *VideoHandler) BatchGenerateUploadURL(c *gin.Context) {
 	})
 }
 
-// POST /api/v1/videos/direct-upload
-// Menerima multipart/form-data: video file dan metadata.
-// Strip audio, upload ke R2, lalu simpan metadata.
-func (h *VideoHandler) DirectUpload(c *gin.Context) {
-	// Parse multipart form
-	if err := c.Request.ParseMultipartForm(30 << 20); err != nil { // 30 MB max
-		c.JSON(http.StatusBadRequest, gin.H{"message": "failed to parse multipart form"})
-		return
-	}
-
-	file, header, err := c.Request.FormFile("file")
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "video file is required"})
-		return
-	}
-	defer file.Close()
-
-	// Read file into memory (since mobile videos shouldn't be huge)
-	fileData := make([]byte, header.Size)
-	if _, err := file.Read(fileData); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "failed to read video file"})
-		return
-	}
-
-	// Read form values
-	videoType := c.PostForm("type")
-	label := c.PostForm("label")
-	name := c.PostForm("name")
-	gender := c.PostForm("gender")
-	isCorrectStr := c.PostForm("is_correct")
-	errorCategory := c.PostForm("error_category")
-	captureLocation := c.PostForm("capture_location")
-
-	isCorrect := false
-	if isCorrectStr == "true" {
-		isCorrect = true
-	}
-
-	// 1. Strip audio using go-mp4 (only for MP4)
-	processedData := fileData
-	// We'll attempt to strip audio. If it fails (e.g. not MP4), we just proceed with original data.
-	mutedData, err := h.videoProcessor.StripAudio(fileData)
-	if err == nil && len(mutedData) > 0 {
-		processedData = mutedData
-	}
-
-	// 2. Generate Upload URL or upload directly via R2 service
-	sampleID := uuid.New().String()
-	videoPath := fmt.Sprintf("Dataset/%s/%s/record_%s.mp4", videoType, label, sampleID)
-	
-	// Since we need to put the object, we should ideally have a PutObject method in R2Service
-	// But wait, the client is already in R2Service. Let's just generate URL and upload, OR use s3.Client directly.
-	// We can add UploadVideo(key, data, contentType) to R2Service.
-	// For now, let's use the R2Client if accessible, or we'll need to modify R2Service.
-	
-	// I'll add UploadVideo to R2Service next.
-	err = h.r2Service.UploadVideo(c.Request.Context(), videoPath, processedData, "video/mp4")
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "failed to upload video to R2: " + err.Error()})
-		return
-	}
-
-	baseURL := h.publicURL
-	if baseURL != "" && baseURL[len(baseURL)-1] != '/' {
-		baseURL += "/"
-	}
-	videoURL := baseURL + videoPath
-
-	// 3. Save metadata
-	taskType := []string{"vlm"}
-	if isCorrect {
-		taskType = []string{"lr", "vlm"}
-	}
-
-	var errCat *string
-	if errorCategory != "" {
-		errCat = &errorCategory
-	}
-
-	req := models.CreateVideoRequest{
-		SampleID: sampleID,
-		TaskType: taskType,
-	}
-	req.Media.VideoPath = videoPath
-	req.Media.VideoURL = videoURL
-	req.Media.CaptureLocation = captureLocation
-
-	req.Label.GestureType = videoType
-	req.Label.GestureName = label
-	req.Label.IsCorrect = isCorrect
-	req.Label.ErrorCategory = errCat
-	// Assigning default region if empty because it might be required by validator.
-	req.Label.BisindoRegionVersion.Region = "Unknown"
-	req.Label.BisindoRegionVersion.Subregion = "Unknown"
-
-	req.Signer.SignerName = name
-	req.Signer.Gender = gender
-
-	err = h.videoRepo.Create(c.Request.Context(), req)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "failed to save metadata: " + err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusCreated, gin.H{
-		"message": "success",
-		"sample_id": sampleID,
-	})
-}
