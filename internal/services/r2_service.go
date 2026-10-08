@@ -40,7 +40,7 @@ func (s *R2Service) GenerateUploadURL(
 			ContentType: &contentType,
 		},
 		func(opts *s3.PresignOptions) {
-			opts.Expires = 15 * time.Minute
+			opts.Expires = 60 * time.Minute
 		},
 	)
 

@@ -3,8 +3,7 @@
 // Base URL, default headers, dan shared config
 // ============================================================
 
-export const BASE_URL =
-    __ENV.BASE_URL || "https://aksacapturebe-production.up.railway.app";
+export const BASE_URL = __ENV.BASE_URL || "https://aksacapturebe-production.up.railway.app";
 export const API_BASE = `${BASE_URL}/api/v1`;
 
 export const JSON_HEADERS = {
@@ -52,26 +51,7 @@ export const LETTERS = [
     "Z",
 ];
 
-export const WORDS = [
-    "selamat pagi",
-    "selamat siang",
-    "selamat sore",
-    "selamat malam",
-    "aku",
-    "saya",
-    "kamu",
-    "dari",
-    "mana",
-    "berasal",
-    "halo",
-    "kabar",
-    "apa",
-    "siapa",
-    "perkenalkan",
-    "nama",
-    "sayang",
-    "marah",
-];
+export const WORDS = ["aku", "saya", "kamu", "perkenalkan", "nama", "apa", "selamat pagi", "siapa", "dari", "mana"];
 
 export const SIGNERS = [
     { name: "Bintang", gender: "female" },
