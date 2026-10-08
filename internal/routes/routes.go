@@ -14,12 +14,6 @@ func RegisterRoutes(
 	api := router.Group("/api/v1")
 
 	{
-		// Handle CORS preflight (OPTIONS) for ALL routes under /api/v1
-		// Without this, browsers get 404 on OPTIONS and block all POST/PATCH requests.
-		api.OPTIONS("/*path", func(c *gin.Context) {
-			c.Status(204)
-		})
-
 		// Upload Video to Cloudflare to generated URL
 		// POST api/v1/upload-url
 		api.POST(
