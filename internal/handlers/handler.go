@@ -102,7 +102,7 @@ func (h *VideoHandler) CreateVideo(
 
 	// Tentukan task_type sesuai logic:
 	// jika is_correct true -> ["lr", "vlm"], jika false -> ["vlm"]
-	if req.Label.IsCorrect != nil && *req.Label.IsCorrect {
+	if req.Label.IsCorrect {
 		req.TaskType = []string{"lr", "vlm"}
 	} else {
 		req.TaskType = []string{"vlm"}
@@ -143,7 +143,7 @@ func (h *VideoHandler) BatchCreateVideo(c *gin.Context) {
 		item := &req.Items[i]
 
 		// Tentukan task_type sesuai logic: is_correct true -> ["lr","vlm"], false -> ["vlm"]
-		if item.Label.IsCorrect != nil && *item.Label.IsCorrect {
+		if item.Label.IsCorrect {
 			item.TaskType = []string{"lr", "vlm"}
 		} else {
 			item.TaskType = []string{"vlm"}
