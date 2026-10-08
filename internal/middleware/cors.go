@@ -9,12 +9,17 @@ import (
 func CORSMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Header("Access-Control-Allow-Origin", "*")
-		c.Header("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, DELETE, OPTIONS")
-		c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Authorization, ngrok-skip-browser-warning")
-		c.Header("Access-Control-Expose-Headers", "Content-Length")
-		c.Header("Access-Control-Max-Age", "43200")
+		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS")
+		// Izinkan semua header yang dikirim oleh request (karena * kadang tidak mempan di beberapa browser/klien lama)
+		reqHeaders := c.GetHeader("Access-Control-Request-Headers")
+		if reqHeaders == "" {
+			reqHeaders = "*"
+		}
+		c.Header("Access-Control-Allow-Headers", reqHeaders)
+		
+		c.Header("Access-Control-Expose-Headers", "*")
+		c.Header("Access-Control-Max-Age", "86400") // 24 jam cache CORS config
 
-		// Respond immediately to preflight requests
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(204)
 			return

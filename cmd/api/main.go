@@ -63,6 +63,15 @@ func main() {
 	router := gin.Default()
 	router.Use(middleware.CORSMiddleware())
 
+	// Terapkan CORS pada NoRoute dan NoMethod agar request OPTIONS ke rute yang salah (atau typo)
+	// tetap mendapat header CORS. Jika tidak, akan terjadi CORS error karena preflight 404 tanpa header yang benar.
+	router.NoRoute(middleware.CORSMiddleware(), func(c *gin.Context) {
+		c.JSON(404, gin.H{"message": "route not found"})
+	})
+	router.NoMethod(middleware.CORSMiddleware(), func(c *gin.Context) {
+		c.JSON(405, gin.H{"message": "method not allowed"})
+	})
+
 	routes.RegisterRoutes(
 		router,
 		videoHandler,
