@@ -59,7 +59,7 @@ func (h *VideoHandler) GenerateUploadURL(
 		timestamp,
 	)
 
-	uploadURL, err := h.r2Service.GenerateUploadURL(videoPath, "video/webm")
+	uploadURL, err := h.r2Service.GenerateUploadURL(videoPath)
 	if err != nil {
 		c.JSON(
 			http.StatusInternalServerError,
@@ -469,7 +469,7 @@ func (h *VideoHandler) BatchGenerateUploadURL(c *gin.Context) {
 			sampleID,
 		)
 
-		uploadURL, err := h.r2Service.GenerateUploadURL(videoPath, "video/webm")
+		uploadURL, err := h.r2Service.GenerateUploadURL(videoPath)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"message": fmt.Sprintf("failed to generate upload URL for %s/%s: %s", item.Type, item.Label, err.Error()),

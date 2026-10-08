@@ -25,8 +25,10 @@ func NewR2Service(
 
 func (s *R2Service) GenerateUploadURL(
 	key string,
-	contentType string,
 ) (string, error) {
+	// ContentType dikunci ke video/webm agar R2 menyimpan file dengan tipe media yang benar.
+	// Browser WAJIB mengirim header Content-Type: video/webm saat melakukan PUT ke presigned URL ini.
+	contentType := "video/webm"
 
 	presigner := s3.NewPresignClient(
 		s.Client,

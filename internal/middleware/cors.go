@@ -36,11 +36,10 @@ func CORSMiddleware() gin.HandlerFunc {
 	}
 
 	return cors.New(cors.Config{
-		AllowOrigins:     defaultOrigins,
+		AllowAllOrigins:  true,
 		AllowMethods:     []string{"GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization", "ngrok-skip-browser-warning"},
 		ExposeHeaders:    []string{"Content-Length"},
-		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
 	})
 }
