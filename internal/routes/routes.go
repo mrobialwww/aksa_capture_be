@@ -14,11 +14,15 @@ func RegisterRoutes(
 	api := router.Group("/api/v1")
 
 	{
-		// Tangani CORS preflight (OPTIONS) untuk semua route di bawah /api/v1.
-		// Tanpa ini, Gin mengembalikan 404 untuk OPTIONS sebelum middleware CORS berjalan.
-		api.OPTIONS("/*path", func(c *gin.Context) {
-			c.Status(204)
-		})
+		// ── Explicit OPTIONS for every POST/PATCH/DELETE endpoint ──────────────
+		// Wajib ada agar browser bisa menyelesaikan CORS preflight tanpa ambigu di routing Gin.
+		api.OPTIONS("/upload-url", func(c *gin.Context) { c.Status(204) })
+		api.OPTIONS("/upload-url/batch", func(c *gin.Context) { c.Status(204) })
+		api.OPTIONS("/videos", func(c *gin.Context) { c.Status(204) })
+		api.OPTIONS("/videos/:id", func(c *gin.Context) { c.Status(204) })
+		api.OPTIONS("/videos/batch", func(c *gin.Context) { c.Status(204) })
+		api.OPTIONS("/videos/:id/metadata", func(c *gin.Context) { c.Status(204) })
+		api.OPTIONS("/sample", func(c *gin.Context) { c.Status(204) })
 
 		// Upload Video to Cloudflare to generated URL
 		// POST api/v1/upload-url
@@ -66,14 +70,12 @@ func RegisterRoutes(
 		)
 
 		// GET /api/v1/sample
-		// Mengambil 5 video per huruf (a-z) dan 5 video per kata dari daftar kata
 		api.GET(
 			"/sample",
 			videoHandler.GetSample,
 		)
 
 		// POST /api/v1/upload-url/batch
-		// Generate upload URL untuk banyak video sekaligus (max 20)
 		api.POST(
 			"/upload-url/batch",
 			videoHandler.BatchGenerateUploadURL,
