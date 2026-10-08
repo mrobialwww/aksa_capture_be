@@ -51,15 +51,15 @@ func (h *VideoHandler) GenerateUploadURL(
 	sampleID := uuid.New().String()
 	timestamp := time.Now().UnixMilli()
 
-	// Format: Dataset/{type}/{label}/record_{timestamp}.mp4
+	// Format: Dataset/{type}/{label}/record_{timestamp}.webm
 	videoPath := fmt.Sprintf(
-		"Dataset/%s/%s/record_%d.mp4",
+		"Dataset/%s/%s/record_%d.webm",
 		req.Type,
 		req.Label,
 		timestamp,
 	)
 
-	uploadURL, err := h.r2Service.GenerateUploadURL(videoPath)
+	uploadURL, err := h.r2Service.GenerateUploadURL(videoPath, "video/webm")
 	if err != nil {
 		c.JSON(
 			http.StatusInternalServerError,
@@ -102,7 +102,7 @@ func (h *VideoHandler) CreateVideo(
 
 	// Tentukan task_type sesuai logic:
 	// jika is_correct true -> ["lr", "vlm"], jika false -> ["vlm"]
-	if req.Label.IsCorrect {
+	if req.Label.IsCorrect != nil && *req.Label.IsCorrect {
 		req.TaskType = []string{"lr", "vlm"}
 	} else {
 		req.TaskType = []string{"vlm"}
@@ -143,7 +143,7 @@ func (h *VideoHandler) BatchCreateVideo(c *gin.Context) {
 		item := &req.Items[i]
 
 		// Tentukan task_type sesuai logic: is_correct true -> ["lr","vlm"], false -> ["vlm"]
-		if item.Label.IsCorrect {
+		if item.Label.IsCorrect != nil && *item.Label.IsCorrect {
 			item.TaskType = []string{"lr", "vlm"}
 		} else {
 			item.TaskType = []string{"vlm"}
@@ -462,16 +462,16 @@ func (h *VideoHandler) BatchGenerateUploadURL(c *gin.Context) {
 	for _, item := range req.Items {
 		sampleID := uuid.New().String()
 
-		// Format: Dataset/{type}/{label}/record_{sampleID}.mp4
+		// Format: Dataset/{type}/{label}/record_{sampleID}.webm
 		// Menggunakan sampleID (UUID) bukan timestamp agar unik meski diproses dalam loop cepat.
 		videoPath := fmt.Sprintf(
-			"Dataset/%s/%s/record_%s.mp4",
+			"Dataset/%s/%s/record_%s.webm",
 			item.Type,
 			item.Label,
 			sampleID,
 		)
 
-		uploadURL, err := h.r2Service.GenerateUploadURL(videoPath)
+		uploadURL, err := h.r2Service.GenerateUploadURL(videoPath, "video/webm")
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"message": fmt.Sprintf("failed to generate upload URL for %s/%s: %s", item.Type, item.Label, err.Error()),

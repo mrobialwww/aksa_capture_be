@@ -256,7 +256,8 @@ func (r *VideoRepository) FindByFilter(
 	}
 
 	// 1. Count query (join label & signer agar WHERE clause bisa pakai kolom mereka)
-	countQuery := `SELECT COUNT(*) FROM videos v LEFT JOIN label l ON l.sample_id = v.sample_id LEFT JOIN signer s ON s.sample_id = v.sample_id` + whereClause
+	// Gunakan join yang sama dengan baseQuery agar hasil count konsisten dengan data yang dikembalikan
+	countQuery := `SELECT COUNT(*) FROM videos v LEFT JOIN media m ON m.sample_id = v.sample_id LEFT JOIN label l ON l.sample_id = v.sample_id LEFT JOIN signer s ON s.sample_id = v.sample_id LEFT JOIN quality q ON q.sample_id = v.sample_id` + whereClause
 	var totalItems int
 	err := r.DB.QueryRow(ctx, countQuery, args...).Scan(&totalItems)
 	if err != nil {

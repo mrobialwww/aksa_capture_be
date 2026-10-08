@@ -25,6 +25,7 @@ func NewR2Service(
 
 func (s *R2Service) GenerateUploadURL(
 	key string,
+	contentType string,
 ) (string, error) {
 
 	presigner := s3.NewPresignClient(
@@ -34,8 +35,9 @@ func (s *R2Service) GenerateUploadURL(
 	req, err := presigner.PresignPutObject(
 		context.Background(),
 		&s3.PutObjectInput{
-			Bucket: &s.Bucket,
-			Key:    &key,
+			Bucket:      &s.Bucket,
+			Key:         &key,
+			ContentType: &contentType,
 		},
 		func(opts *s3.PresignOptions) {
 			opts.Expires = 15 * time.Minute
