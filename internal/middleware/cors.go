@@ -1,45 +1,25 @@
 package middleware
 
 import (
-	"os"
-	"strings"
-	"time"
-
-	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
-// CORSMiddleware returns a Gin middleware that allows cross-origin requests
-// from the origins listed in the CORS_ALLOWED_ORIGINS environment variable,
-// plus a hardcoded set of local dev origins.
-//
-// Example .env entry:
-//
-//	CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001
+// CORSMiddleware manually sets CORS headers on every response.
+// This is simpler and more predictable than using gin-contrib/cors.
 func CORSMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Header("Access-Control-Allow-Origin", "*")
+		c.Header("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, DELETE, OPTIONS")
+		c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Authorization, ngrok-skip-browser-warning")
+		c.Header("Access-Control-Expose-Headers", "Content-Length")
+		c.Header("Access-Control-Max-Age", "43200")
 
-	// Default dev origins — always allowed
-	defaultOrigins := []string{
-		"http://localhost:3000",
-		"http://localhost:3001",
-		"https://aksa-capture.vercel.app",
-	}
-
-	// Merge with any additional origins set via environment variable
-	if extra := os.Getenv("CORS_ALLOWED_ORIGINS"); extra != "" {
-		for _, o := range strings.Split(extra, ",") {
-			o = strings.TrimSpace(o)
-			if o != "" {
-				defaultOrigins = append(defaultOrigins, o)
-			}
+		// Respond immediately to preflight requests
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(204)
+			return
 		}
-	}
 
-	return cors.New(cors.Config{
-		AllowAllOrigins:  true,
-		AllowMethods:     []string{"GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization", "ngrok-skip-browser-warning"},
-		ExposeHeaders:    []string{"Content-Length"},
-		MaxAge:           12 * time.Hour,
-	})
+		c.Next()
+	}
 }
