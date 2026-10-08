@@ -14,6 +14,12 @@ func RegisterRoutes(
 	api := router.Group("/api/v1")
 
 	{
+		// Tangani CORS preflight (OPTIONS) untuk semua route di bawah /api/v1.
+		// Tanpa ini, Gin mengembalikan 404 untuk OPTIONS sebelum middleware CORS berjalan.
+		api.OPTIONS("/*path", func(c *gin.Context) {
+			c.Status(204)
+		})
+
 		// Upload Video to Cloudflare to generated URL
 		// POST api/v1/upload-url
 		api.POST(
