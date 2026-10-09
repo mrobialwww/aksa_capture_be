@@ -125,7 +125,7 @@ func (h *VideoHandler) CreateVideo(
 }
 
 // POST /api/v1/videos/batch
-// Membuat metadata untuk banyak video sekaligus (maksimal 20).
+// Membuat metadata untuk banyak video sekaligus (maksimal 100).
 // Setiap item diproses secara berurutan; jika satu gagal, item lain tetap diproses.
 // Response berisi per-item status "success" atau "error".
 func (h *VideoHandler) BatchCreateVideo(c *gin.Context) {
@@ -441,7 +441,7 @@ func (h *VideoHandler) GetSample(c *gin.Context) {
 }
 
 // POST /api/v1/upload-url/batch
-// Generate upload URL untuk banyak video sekaligus (maksimal 20).
+// Generate upload URL untuk banyak video sekaligus (maksimal 100).
 func (h *VideoHandler) BatchGenerateUploadURL(c *gin.Context) {
 	var req models.BatchUploadURLRequest
 

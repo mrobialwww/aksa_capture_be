@@ -1,14 +1,14 @@
 package models
 
 // BatchUploadURLRequest adalah request body untuk endpoint POST /api/v1/upload-url/batch.
-// Mendukung upload hingga 20 video sekaligus.
+// Mendukung upload hingga 100 video sekaligus.
 type BatchUploadURLRequestItem struct {
 	Type  string `json:"type"  binding:"required,oneof=letter word"`
 	Label string `json:"label" binding:"required"`
 }
 
 type BatchUploadURLRequest struct {
-	Items []BatchUploadURLRequestItem `json:"items" binding:"required,min=1,max=20"`
+	Items []BatchUploadURLRequestItem `json:"items" binding:"required,min=1,max=100"`
 }
 
 // BatchUploadURLResponseItem adalah satu item hasil generate upload URL.
